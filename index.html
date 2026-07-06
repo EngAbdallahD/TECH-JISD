@@ -227,6 +227,11 @@ body.has-po .credit{bottom:44px}
 .seg button.on.ok{background:rgba(70,192,138,.18);border-color:var(--green);color:var(--green)}
 .seg button.on.bad{background:rgba(224,85,77,.18);border-color:var(--red);color:var(--red)}
 .pwhy{flex-basis:100%;margin-top:4px;font-size:13px;padding:7px 10px}
+.slide{position:relative;display:inline-flex;border:1px solid var(--line2);border-radius:16px;background:var(--bg);cursor:pointer;user-select:none;vertical-align:middle}
+.slide em{font-style:normal;position:relative;z-index:1;padding:4px 12px;font-size:11px;font-weight:700;letter-spacing:.03em;color:var(--muted);transition:color .15s;white-space:nowrap}
+.slide em.on{color:#1a120a}
+.slide i{position:absolute;top:2px;bottom:2px;left:2px;width:calc(50% - 3px);background:var(--copper);border-radius:14px;transition:left .18s}
+.slide.r i{left:calc(50% + 1px)}
 </style>
 </head>
 <body>
@@ -239,7 +244,7 @@ body.has-po .credit{bottom:44px}
     <button class="theme-btn login-theme" title="Light / dark">☀</button>
     <div class="login-hd">
       <h1>JISD <em>Workshop OS</em></h1>
-      <p>Jordan Investment &amp; Southern Development Co. <span style="float:right;color:var(--copper)">v5.4</span></p>
+      <p>Jordan Investment &amp; Southern Development Co. <span style="float:right;color:var(--copper)">v5.6</span></p>
     </div>
     <div class="login-bd">
       <label id="opLabel">Select operator</label>
@@ -2762,23 +2767,27 @@ function printReport(j,d){
     }
     const ir=tt.ir||{}, r=tt.r||{}, v=tt.v||{}, cu=tt.i||{}, vb=tt.vib||{};
     const hasVib=!vibOff && ["deh","dev","dea","ndeh","ndev","ndea"].some(k=>vb[k]);
+    const irU = tt.irUnit==="G"?"GΩ":"MΩ";
+    const rU = tt.rUnit==="MOHM"?"mΩ":"Ω";
+    const rL = tt.rMode==="PH" ? ["Phase U","Phase V","Phase W"] : ["U–V","V–W","W–U"];
+    const showRun = !tt.runOff;
     return `
     <h3>${name} test record — tested by ${esc(tt.tested_by)} · ${dstr(tt.at)}</h3>
     <table>
-      <tr><th colspan="7">Insulation resistance — Megger (MΩ)</th></tr>
+      <tr><th colspan="7">Insulation resistance — Megger (${irU})</th></tr>
       <tr><td></td><td><b>U–E</b></td><td><b>V–E</b></td><td><b>W–E</b></td><td><b>U–V</b></td><td><b>V–W</b></td><td><b>W–U</b></td></tr>
       <tr><td>IR</td><td>${cell(ir.ue)}</td><td>${cell(ir.ve)}</td><td>${cell(ir.we)}</td><td>${cell(ir.uv)}</td><td>${cell(ir.vw)}</td><td>${cell(ir.wu)}</td></tr>
     </table>
     <table style="margin-top:6px">
-      <tr><th colspan="4">Stator winding resistance (Ω)</th></tr>
-      <tr><td><b>U–V</b></td><td><b>V–W</b></td><td><b>W–U</b></td><td><b>Unbalance</b></td></tr>
+      <tr><th colspan="4">${tt.rMode==="PH"?"Phase":"Phase-to-phase"} winding resistance (${rU})</th></tr>
+      <tr><td><b>${rL[0]}</b></td><td><b>${rL[1]}</b></td><td><b>${rL[2]}</b></td><td><b>Unbalance</b></td></tr>
       <tr><td>${cell(r.uv)}</td><td>${cell(r.vw)}</td><td>${cell(r.wu)}</td><td>${cell(tt.balance)} %</td></tr>
     </table>
-    <table style="margin-top:6px">
+    ${showRun?`<table style="margin-top:6px">
       <tr><th colspan="7">Run readings</th></tr>
       <tr><td></td><td><b>V L1–L2</b></td><td><b>V L2–L3</b></td><td><b>V L1–L3</b></td><td><b>I L1</b></td><td><b>I L2</b></td><td><b>I L3</b></td></tr>
       <tr><td>${cell(tt.rpm)} RPM</td><td>${cell(v.l12)} V</td><td>${cell(v.l23)} V</td><td>${cell(v.l13)} V</td><td>${cell(cu.l1)} A</td><td>${cell(cu.l2)} A</td><td>${cell(cu.l3)} A</td></tr>
-    </table>
+    </table>`:""}
     ${hasVib?`<table style="margin-top:6px">
       <tr><th colspan="4">Vibration record (mm/s ${tt.vibUnit==="PEAK"?"Peak":"RMS"})</th></tr>
       <tr><td></td><td><b>Horizontal</b></td><td><b>Vertical</b></td><td><b>Axial</b></td></tr>
@@ -2926,8 +2935,16 @@ function renderTech(list){
 /* shared test form (technician inline / master modal) — Section 2 layout */
 function buildTestForm(host, d, phase, autoAdvance){
   const t=(d.tests&&d.tests[phase])||{};
-  const vibOff = !!(d.vibOff && d.vibOff[phase]);
-  const vibUnit = (d.vibUnit && d.vibUnit[phase]) || (t.vibUnit) || "RMS";
+  const P=k=>(d[k]&&d[k][phase]);
+  const vibOff = !!P("vibOff");
+  const runOff = phase==="initial" && !!P("runOff");
+  const vibUnit = P("vibUnit") || t.vibUnit || "RMS";
+  const irUnit  = P("irUnit")  || t.irUnit  || "M";
+  const rUnit   = P("rUnit")   || t.rUnit   || "OHM";
+  const rMode   = P("rMode")   || t.rMode   || "PP";
+  const irU = irUnit==="G" ? "GΩ" : "MΩ";
+  const rU  = rUnit==="MOHM" ? "mΩ" : "Ω";
+  const rL  = rMode==="PP" ? ["U — V","V — W","W — U"] : ["Phase U","Phase V","Phase W"];
   const ir=t.ir&&typeof t.ir==="object"?t.ir:{};
   const legacyIr=typeof t.ir==="string"?t.ir:"";
   const r=t.r||{uv:t.r_uv||"",vw:t.r_vw||"",wu:t.r_wu||""};
@@ -2935,24 +2952,39 @@ function buildTestForm(host, d, phase, autoAdvance){
   const cu=t.i||{l1:t.i1||"",l2:t.i2||"",l3:t.i3||""};
   const vb=t.vib&&typeof t.vib==="object"?t.vib:{};
   const IN=(cls,val,ph)=>`<input class="${cls}" inputmode="decimal" value="${esc(val||"")}" placeholder="${ph}">`;
+  const seg=(field,cur,opts)=>`<span class="seg">${opts.map(o=>`<button type="button" class="tf-opt ${cur===o.v?"on ok":""}" data-f="${field}" data-v="${o.v}">${o.l}</button>`).join("")}</span>`;
+  const master = me&&me.role==="master";
   host.innerHTML=`
-    <h4 class="psec">Insulation resistance — Megger (MΩ) · six readings</h4>
+    <h4 class="psec" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+      <span>Insulation resistance — Megger (${irU}) · six readings</span>
+      ${seg("irUnit",irUnit,[{v:"M",l:"MΩ"},{v:"G",l:"GΩ"}])}
+    </h4>
     <div class="grid3">
-      <div><label>U — E</label>${IN("tf-iue",ir.ue||legacyIr,"MΩ")}</div>
-      <div><label>V — E</label>${IN("tf-ive",ir.ve,"MΩ")}</div>
-      <div><label>W — E</label>${IN("tf-iwe",ir.we,"MΩ")}</div>
-      <div><label>U — V</label>${IN("tf-iuv",ir.uv,"MΩ")}</div>
-      <div><label>V — W</label>${IN("tf-ivw",ir.vw,"MΩ")}</div>
-      <div><label>W — U</label>${IN("tf-iwu",ir.wu,"MΩ")}</div>
+      <div><label>U — E</label>${IN("tf-iue",ir.ue||legacyIr,irU)}</div>
+      <div><label>V — E</label>${IN("tf-ive",ir.ve,irU)}</div>
+      <div><label>W — E</label>${IN("tf-iwe",ir.we,irU)}</div>
+      <div><label>U — V</label>${IN("tf-iuv",ir.uv,irU)}</div>
+      <div><label>V — W</label>${IN("tf-ivw",ir.vw,irU)}</div>
+      <div><label>W — U</label>${IN("tf-iwu",ir.wu,irU)}</div>
     </div>
-    <h4 class="psec">Stator winding resistance (Ω)</h4>
+    <h4 class="psec" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+      <span>${rMode==="PP"?"Phase-to-phase":"Phase"} winding resistance (${rU})</span>
+      <span style="display:flex;gap:6px">
+        ${seg("rMode",rMode,[{v:"PP",l:"Phase–Phase"},{v:"PH",l:"Phase"}])}
+        ${seg("rUnit",rUnit,[{v:"OHM",l:"Ω"},{v:"MOHM",l:"mΩ"}])}
+      </span>
+    </h4>
     <div class="grid3">
-      <div><label>U — V</label>${IN("tf-ruv",r.uv,"Ω")}</div>
-      <div><label>V — W</label>${IN("tf-rvw",r.vw,"Ω")}</div>
-      <div><label>W — U</label>${IN("tf-rwu",r.wu,"Ω")}</div>
+      <div><label>${rL[0]}</label>${IN("tf-ruv",r.uv,rU)}</div>
+      <div><label>${rL[1]}</label>${IN("tf-rvw",r.vw,rU)}</div>
+      <div><label>${rL[2]}</label>${IN("tf-rwu",r.wu,rU)}</div>
     </div>
     <div class="bal" data-bal>Resistance balance: —</div>
-    <h4 class="psec">Run readings — voltage (V) / current (A) / speed</h4>
+    <h4 class="psec" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+      <span>Run readings — voltage (V) / current (A) / speed</span>
+      ${(master&&phase==="initial")?`<button type="button" class="btn sm ${runOff?"":"ghost"} tf-runtoggle">${runOff?"⊘ Disabled — click to enable":"Disable for this test"}</button>`:""}
+    </h4>
+    ${runOff?`<p class="note" style="margin-bottom:6px">Run readings disabled by master — they will not appear on the report for the initial test.</p>`:`
     <div class="grid3">
       <div><label>V · L1–L2</label>${IN("tf-v12",v.l12,"V")}</div>
       <div><label>V · L2–L3</label>${IN("tf-v23",v.l23,"V")}</div>
@@ -2961,22 +2993,22 @@ function buildTestForm(host, d, phase, autoAdvance){
       <div><label>I · L2</label>${IN("tf-i2",cu.l2,"A")}</div>
       <div><label>I · L3</label>${IN("tf-i3",cu.l3,"A")}</div>
     </div>
-    <div class="grid3"><div><label>Speed (RPM)</label>${IN("tf-rpm",t.rpm,"RPM")}</div></div>
+    <div class="grid3"><div><label>Speed (RPM)</label>${IN("tf-rpm",t.rpm,"RPM")}</div></div>`}
     <h4 class="psec" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
       <span>Vibration record (mm/s ${vibUnit==="PEAK"?"Peak":"RMS"}) · DE / NDE × H / V / A</span>
       <span style="display:flex;gap:6px;align-items:center">
-        ${(me&&me.role==="master"&&!vibOff)?`<span class="seg"><button type="button" data-u="RMS" class="tf-vunit ${vibUnit==="RMS"?"on ok":""}">RMS</button><button type="button" data-u="PEAK" class="tf-vunit ${vibUnit==="PEAK"?"on ok":""}">Peak</button></span>`:""}
-        ${(me&&me.role==="master")?`<button type="button" class="btn sm ${vibOff?"":"ghost"} tf-vibtoggle">${vibOff?"⊘ Disabled — click to enable":"Disable for this test"}</button>`:""}
+        ${(master&&!vibOff)?seg("vibUnit",vibUnit,[{v:"RMS",l:"RMS"},{v:"PEAK",l:"Peak"}]):""}
+        ${master?`<button type="button" class="btn sm ${vibOff?"":"ghost"} tf-vibtoggle">${vibOff?"⊘ Disabled — click to enable":"Disable for this test"}</button>`:""}
       </span>
     </h4>
     ${vibOff?`<p class="note" style="margin-bottom:6px">Vibration record disabled by master — it will not appear on the final report for this ${phase} test.</p>`:`
     <div class="grid3">
-      <div><label>DE — Horizontal</label>${IN("tf-vdeh",vb.deh,"mm/s "+(vibUnit==="PEAK"?"Peak":"RMS"))}</div>
-      <div><label>DE — Vertical</label>${IN("tf-vdev",vb.dev,"mm/s "+(vibUnit==="PEAK"?"Peak":"RMS"))}</div>
-      <div><label>DE — Axial</label>${IN("tf-vdea",vb.dea,"mm/s "+(vibUnit==="PEAK"?"Peak":"RMS"))}</div>
-      <div><label>NDE — Horizontal</label>${IN("tf-vndeh",vb.ndeh,"mm/s "+(vibUnit==="PEAK"?"Peak":"RMS"))}</div>
-      <div><label>NDE — Vertical</label>${IN("tf-vndev",vb.ndev,"mm/s "+(vibUnit==="PEAK"?"Peak":"RMS"))}</div>
-      <div><label>NDE — Axial</label>${IN("tf-vndea",vb.ndea,"mm/s "+(vibUnit==="PEAK"?"Peak":"RMS"))}</div>
+      <div><label>DE — Horizontal</label>${IN("tf-vdeh",vb.deh,"mm/s")}</div>
+      <div><label>DE — Vertical</label>${IN("tf-vdev",vb.dev,"mm/s")}</div>
+      <div><label>DE — Axial</label>${IN("tf-vdea",vb.dea,"mm/s")}</div>
+      <div><label>NDE — Horizontal</label>${IN("tf-vndeh",vb.ndeh,"mm/s")}</div>
+      <div><label>NDE — Vertical</label>${IN("tf-vndev",vb.ndev,"mm/s")}</div>
+      <div><label>NDE — Axial</label>${IN("tf-vndea",vb.ndea,"mm/s")}</div>
     </div>`}
     <label>Notes</label><input class="tf-n" value="${esc(t.notes||"")}" placeholder="optional">
     <div style="margin-top:14px"><button class="btn primary tf-save">Submit ${phase==="initial"?"initial":"final"} test</button></div>`;
@@ -2986,44 +3018,40 @@ function buildTestForm(host, d, phase, autoAdvance){
     const vals=rIn.map(i=>parseFloat(i.value)).filter(x=>!isNaN(x)&&x>0);
     if(vals.length<3){ balEl.textContent="Resistance balance: —"; balEl.className="bal"; return null; }
     const avg=vals.reduce((a,b)=>a+b)/3;
-    const dev=Math.max(...vals.map(x=>Math.abs(x-avg)))/avg*100;
-    balEl.textContent="Resistance unbalance (NEMA): "+dev.toFixed(2)+" % "+(dev<=2?"✓ within 2% limit":"⚠ exceeds 2% limit");
-    balEl.className="bal "+(dev<=2?"ok":"bad");
+    const dev=Math.max(...vals.map(x=>Math.abs(x-avg)))/avg*100; /* max deviation from average */
+    balEl.textContent="Resistance unbalance (max deviation): "+dev.toFixed(2)+" % "+(dev<=4?"✓ within 4% limit":"⚠ exceeds 4% limit");
+    balEl.className="bal "+(dev<=4?"ok":"bad");
     return dev.toFixed(2);
   }
   rIn.forEach(i=>i.oninput=bal); bal();
-  host.querySelectorAll(".tf-vunit").forEach(b=>{
-    b.onclick=async ()=>{
-      const u=b.dataset.u;
-      if(u===vibUnit) return;
-      await updateDoc(doc(db,"devices",d.id),{["vibUnit."+phase]: u});
-      d.vibUnit=Object.assign({}, d.vibUnit||{}); d.vibUnit[phase]=u;
-      buildTestForm(host, d, phase, autoAdvance);
-      toast("Vibration values recorded as mm/s "+(u==="PEAK"?"Peak":"RMS"));
-    };
-  });
-  const vt=host.querySelector(".tf-vibtoggle");
-  if(vt) vt.onclick=async ()=>{
-    const nv=!vibOff;
-    await updateDoc(doc(db,"devices",d.id),{["vibOff."+phase]: nv});
-    d.vibOff=Object.assign({}, d.vibOff||{}); d.vibOff[phase]=nv;
+  async function setOpt(field,val){
+    await updateDoc(doc(db,"devices",d.id),{[field+"."+phase]: val});
+    d[field]=Object.assign({}, d[field]||{}); d[field][phase]=val;
     buildTestForm(host, d, phase, autoAdvance);
-    toast(nv?"Vibration record disabled for the "+phase+" test":"Vibration record enabled");
-  };
+  }
+  host.querySelectorAll(".tf-opt").forEach(b=>{ b.onclick=()=>setOpt(b.dataset.f, b.dataset.v); });
+  const vt=host.querySelector(".tf-vibtoggle");
+  if(vt) vt.onclick=()=>setOpt("vibOff", !vibOff).then(()=>toast(!vibOff?"Vibration record disabled for the "+phase+" test":"Vibration record enabled"));
+  const rt=host.querySelector(".tf-runtoggle");
+  if(rt) rt.onclick=()=>setOpt("runOff", !runOff).then(()=>toast(!runOff?"Run readings disabled for the initial test":"Run readings enabled"));
   host.querySelector(".tf-save").onclick=async ()=>{
     const tester = (me && me.role==="technician") ? window.TESTER : (me && me.name);
     if(!tester) return toast("⛔ Select who is testing first — top of the screen");
-    const g=c=>host.querySelector(c).value.trim();
+    const g=c=>{ const el=host.querySelector(c); return el?el.value.trim():""; };
     if(!g(".tf-iue")||!g(".tf-ive")||!g(".tf-iwe")) return toast("⛔ The three phase-to-earth IR readings are required");
     if(!g(".tf-ruv")||!g(".tf-rvw")||!g(".tf-rwu")) return toast("⛔ All three winding resistances are required");
     const payload={
       ir:{ue:g(".tf-iue"), ve:g(".tf-ive"), we:g(".tf-iwe"), uv:g(".tf-iuv"), vw:g(".tf-ivw"), wu:g(".tf-iwu")},
+      irUnit,
       r:{uv:g(".tf-ruv"), vw:g(".tf-rvw"), wu:g(".tf-rwu")},
-      v:{l12:g(".tf-v12"), l23:g(".tf-v23"), l13:g(".tf-v13")},
-      i:{l1:g(".tf-i1"), l2:g(".tf-i2"), l3:g(".tf-i3")},
+      rUnit, rMode,
+      v: runOff ? null : {l12:g(".tf-v12"), l23:g(".tf-v23"), l13:g(".tf-v13")},
+      i: runOff ? null : {l1:g(".tf-i1"), l2:g(".tf-i2"), l3:g(".tf-i3")},
+      rpm: runOff ? null : g(".tf-rpm"),
+      runOff: runOff||false,
       vib: vibOff ? null : {deh:g(".tf-vdeh"), dev:g(".tf-vdev"), dea:g(".tf-vdea"), ndeh:g(".tf-vndeh"), ndev:g(".tf-vndev"), ndea:g(".tf-vndea")},
       vibUnit: vibOff ? null : vibUnit,
-      rpm:g(".tf-rpm"), balance:bal()||"", notes:g(".tf-n"),
+      balance:bal()||"", notes:g(".tf-n"),
       tested_by: tester, at: Date.now()
     };
     const upd={ ["tests."+phase]: payload };
