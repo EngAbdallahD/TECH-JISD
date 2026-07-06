@@ -212,7 +212,7 @@ body.has-po .wrap{padding-bottom:64px}
 /* toast */
 #toast{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:99;background:var(--panel2);border:1px solid var(--copper);border-radius:8px;padding:10px 18px;font-size:14px;display:none}
 #toast.on{display:block}
-.devrow{display:grid;grid-template-columns:1fr 1.5fr .9fr .6fr 1.2fr 34px;gap:8px;margin-bottom:8px;align-items:center}
+.devrow{display:grid;grid-template-columns:1fr 1.4fr .65fr .8fr .5fr 1.1fr 34px;gap:8px;margin-bottom:8px;align-items:center}
 @media(max-width:820px){.devrow{grid-template-columns:1fr 1fr}.offer-rows .orow{grid-template-columns:1fr 60px 90px 30px}}
 .archived-note{font-size:12px;color:var(--green)}
 .credit{position:fixed;left:0;right:0;bottom:0;z-index:30;text-align:center;font-family:"Saira Condensed";letter-spacing:.22em;font-size:11px;color:var(--faint);padding:6px 10px;background:linear-gradient(0deg,var(--bg) 60%,transparent);pointer-events:none;text-transform:uppercase}
@@ -239,7 +239,7 @@ body.has-po .credit{bottom:44px}
     <button class="theme-btn login-theme" title="Light / dark">☀</button>
     <div class="login-hd">
       <h1>JISD <em>Workshop OS</em></h1>
-      <p>Jordan Investment &amp; Southern Development Co. <span style="float:right;color:var(--copper)">v4.9</span></p>
+      <p>Jordan Investment &amp; Southern Development Co. <span style="float:right;color:var(--copper)">v5.4</span></p>
     </div>
     <div class="login-bd">
       <label id="opLabel">Select operator</label>
@@ -268,6 +268,7 @@ body.has-po .credit{bottom:44px}
       <button data-t="jobs" class="on">Active jobs</button>
       <button data-t="new">New job</button>
       <button data-t="scan">Re-entry scan</button>
+      <button data-t="warr">Warranty</button>
       <button data-t="arch">Archive</button>
     </div>
 
@@ -305,13 +306,20 @@ body.has-po .credit{bottom:44px}
         <h2>Machine re-entry scan</h2>
         <p class="note">Search the device registry by serial identifier. The system checks the warranty window and prior service scope automatically.</p>
         <div style="display:flex;gap:10px;margin-top:12px">
-          <input id="scanSerial" placeholder="Machine serial number" style="max-width:340px">
+          <input id="scanSerial" placeholder="Machine serial number or TAG (BB-000)" style="max-width:340px">
           <button class="btn primary" id="scanBtn">Scan registry</button>
         </div>
         <div id="scanResult"></div>
       </div>
     </div>
 
+    <div id="tab-warr" class="hidden">
+      <div class="panel">
+        <h2>Warranty &amp; dispatch desk</h2>
+        <p class="note">Every machine that reaches the Transportation station lands here. Set its warranty window, activate the authorization, and dispatch it to the archive.</p>
+      </div>
+      <div id="warrList"></div>
+    </div>
     <div id="tab-arch" class="hidden"><div id="archList"><p class="note">Loading archive…</p></div></div>
   </div>
   <div id="poBanner"><span class="tag">⚠ PO MISSING</span><span id="poItems"></span></div>
@@ -1770,19 +1778,21 @@ const pw = pin => "JISD-" + pin + "-KEY";
 const PATHS = {
   "OVERHAUL": ["missing_parts","inspection","electrical_test_initial","draft_offer","quotation","clean_and_dry","mechanical_section","assembly","electrical_test_final","painting","transportation"],
   "REWINDING & OVERHAUL": ["missing_parts","inspection","electrical_test_initial","draft_offer","quotation","electrical_section","mechanical_section","assembly","electrical_test_final","painting","transportation"],
-  "REWINDING": ["missing_parts","inspection","electrical_test_initial","draft_offer","quotation","electrical_section","assembly","electrical_test_final","transportation"]
+  "REWINDING": ["missing_parts","inspection","electrical_test_initial","draft_offer","quotation","electrical_section","assembly","electrical_test_final","transportation"],
+  "REPAIR": ["missing_parts","inspection","electrical_test_initial","draft_offer","quotation","mechanical_section","assembly","electrical_test_final","painting","transportation"],
+  "OVERHAUL & REPAIR": ["missing_parts","inspection","electrical_test_initial","draft_offer","quotation","clean_and_dry","mechanical_section","assembly","electrical_test_final","painting","transportation"]
 };
 const LBL = {
   missing_parts:"Missing parts check", inspection:"Findings status", electrical_test_initial:"Electrical test — initial", draft_offer:"Draft offer",
   quotation:"Quotation", clean_and_dry:"Clean & dry", electrical_section:"Electrical section (rewinding)",
   mechanical_section:"Mechanical section", assembly:"Assembly", electrical_test_final:"Final test & solo run",
-  solo_run:"Solo run", painting:"Painting", transportation:"Transportation & warranty", archived:"Archived"
+  solo_run:"Solo run", painting:"Painting", transportation:"Transportation", archived:"Archived"
 };
 const KANBAN_ORDER = ["missing_parts","inspection","electrical_test_initial","draft_offer","quotation","clean_and_dry","electrical_section","mechanical_section","assembly","electrical_test_final","painting","transportation"];
 const DASH_ORDER = ["inspection","electrical_test_initial","draft_offer","quotation","electrical_section","mechanical_section","clean_and_dry","assembly","electrical_test_final","painting","transportation"];
-const SLBL = {inspection:"Findings status", electrical_test_initial:"Elec. test — initial", draft_offer:"Draft offer", quotation:"Quotation", electrical_section:"Electrical (rewinding)", mechanical_section:"Mechanical section", clean_and_dry:"Clean & dry", assembly:"Assembly", electrical_test_final:"Final test & solo run", painting:"Painting", transportation:"Transport & warranty"};
+const SLBL = {inspection:"Findings status", electrical_test_initial:"Elec. test — initial", draft_offer:"Draft offer", quotation:"Quotation", electrical_section:"Electrical (rewinding)", mechanical_section:"Mechanical section", clean_and_dry:"Clean & dry", assembly:"Assembly", electrical_test_final:"Final test & solo run", painting:"Painting", transportation:"Transportation"};
 function dashStation(d){ const st=stationOf(d); return st==="missing_parts" ? "inspection" : st; }
-const ALBL = {inspection:"نتائج الفحص", electrical_test_initial:"فحص كهربائي — أولي", draft_offer:"عرض سعر مبدئي", quotation:"عرض السعر النهائي", electrical_section:"القسم الكهربائي (إعادة لف)", mechanical_section:"القسم الميكانيكي", clean_and_dry:"تنظيف وتجفيف", assembly:"التجميع", electrical_test_final:"الفحص النهائي والتشغيل التجريبي", painting:"الدهان", transportation:"النقل والكفالة"};
+const ALBL = {inspection:"نتائج الفحص", electrical_test_initial:"فحص كهربائي — أولي", draft_offer:"عرض سعر مبدئي", quotation:"عرض السعر النهائي", electrical_section:"القسم الكهربائي (إعادة لف)", mechanical_section:"القسم الميكانيكي", clean_and_dry:"تنظيف وتجفيف", assembly:"التجميع", electrical_test_final:"الفحص النهائي والتشغيل التجريبي", painting:"الدهان", transportation:"النقل"};
 const AR_UI = {title:"أرضية الإنتاج", sub:"لوحة الحالة المباشرة", live:"مباشر", exit:"خروج",
   kJobs:"أوامر عمل مفتوحة · ", kActive:"أجهزة داخل الورشة الآن", k90:"منجزة · آخر 90 يوماً", kBars:"الإنتاجية — آخر 3 أشهر",
   start:"البداية · الاستلام", end:"النهاية · التسليم", clear:"المحطة فارغة"};
@@ -1964,7 +1974,7 @@ document.querySelectorAll(".tabs button").forEach(b=>{
   b.onclick=()=>{
     document.querySelectorAll(".tabs button").forEach(x=>x.classList.remove("on"));
     b.classList.add("on");
-    ["jobs","new","scan","arch"].forEach(t=>$("#tab-"+t).classList.toggle("hidden", t!==b.dataset.t));
+    ["jobs","new","scan","warr","arch"].forEach(t=>$("#tab-"+t).classList.toggle("hidden", t!==b.dataset.t));
   };
 });
 
@@ -1991,11 +2001,11 @@ function startMaster(){
   if(!$("#njDevices").children.length) addDevRow();
   const uj = onSnapshot(collection(db,"jobs"), s=>{
     JOBS={}; s.forEach(d=>JOBS[d.id]={id:d.id,...d.data()});
-    renderJobs(); renderArchive(); renderPOBanner(); refreshClientMemory();
+    renderJobs(); renderArchive(); renderPOBanner(); refreshClientMemory(); renderWarranty();
   });
   const ud = onSnapshot(collection(db,"devices"), s=>{
     DEVICES={}; s.forEach(d=>DEVICES[d.id]={id:d.id,...d.data()});
-    renderJobs(); renderArchive();
+    renderJobs(); renderArchive(); renderWarranty();
   });
   unsubs.push(uj,ud);
 }
@@ -2009,6 +2019,7 @@ function addDevRow(pre){
       <select class="d-type">${DEVICE_TYPES.map(t=>`<option value="${t.code}" ${pre&&pre.deviceCode===t.code?"selected":""}>${t.name}</option>`).join("")}</select>
       <input class="d-other hidden" placeholder="Type the device name by hand" value="${esc(pre&&pre.otherName||"")}">
     </div>
+    <input placeholder="TAG (auto: AA-000)" class="d-tag mono" maxlength="7" value="${esc(pre&&pre.tag||"")}">
     <input placeholder="Serial no." class="d-serial mono" value="${esc(pre&&pre.serial||"")}">
     <input placeholder="kW" class="d-kw mono" value="${esc(pre&&pre.kw||"")}">
     <div class="typewrap">
@@ -2028,6 +2039,23 @@ function addDevRow(pre){
 $("#njAddDev").onclick=()=>addDevRow();
 
 function serialToJN(n){ return "QJ-"+YEAR+"-JISD-"+String(n).padStart(4,"0"); }
+/* workshop TAG: two letters + three digits, unique per machine (AA-000 … ZZ-999) */
+function fmtTag(seq){ const li=Math.floor(seq/1000); const a=String.fromCharCode(65+Math.floor(li/26)%26), b=String.fromCharCode(65+(li%26)); return a+b+"-"+String(seq%1000).padStart(3,"0"); }
+function normTag(t){ const m=String(t||"").toUpperCase().replace(/[^A-Z0-9]/g,"").match(/^([A-Z]{2})([0-9]{3})$/); return m ? m[1]+"-"+m[2] : null; }
+async function nextTag(){
+  return runTransaction(db, async tx=>{
+    const cref=doc(db,"meta","counters");
+    const c=await tx.get(cref);
+    const cur=c.exists()?(c.data().tagSeq||0):0;
+    tx.set(cref,{tagSeq:cur+1},{merge:true});
+    return fmtTag(cur);
+  });
+}
+async function tagTaken(tag, exceptId){
+  const snap=await getDocs(query(collection(db,"devices"), where("tag","==",tag)));
+  let taken=false; snap.forEach(x=>{ if(x.id!==exceptId) taken=true; });
+  return taken;
+}
 async function serialTaken(n){
   const snap=await getDocs(query(collection(db,"jobs"), where("jobNumber","==",serialToJN(n))));
   return !snap.empty;
@@ -2061,6 +2089,7 @@ $("#njCreate").onclick = async ()=>{
       name:r.querySelector(".d-name").value.trim(),
       deviceCode:code,
       type: code==="OTHER" ? (other||"Other") : dt.name,
+      tagRaw:r.querySelector(".d-tag").value.trim(),
       serial:r.querySelector(".d-serial").value.trim(),
       kw:r.querySelector(".d-kw").value.trim(),
       workflow: wsel==="OTHER" ? (wname||"CUSTOM SERVICE") : wsel,
@@ -2068,6 +2097,17 @@ $("#njCreate").onclick = async ()=>{
     };
   }).filter(d=>d.name);
   if(!rows.length) return toast("Add at least one device");
+  const seenTags={};
+  for(const r of rows){
+    if(r.tagRaw){
+      const t=normTag(r.tagRaw);
+      if(!t) return toast("⛔ TAG must be two letters + three numbers (e.g. BB-000): "+r.tagRaw);
+      if(seenTags[t]) return toast("⛔ TAG "+t+" is repeated in this job");
+      seenTags[t]=1;
+      if(await tagTaken(t)) return toast("⛔ TAG "+t+" is already assigned to another machine");
+      r.tag=t;
+    }
+  }
   $("#njCreate").disabled=true;
   try{
     const emails=$("#njEmails").value.split(/[\s,;]+/).map(x=>x.trim()).filter(x=>x.indexOf("@")>0);
@@ -2103,7 +2143,9 @@ async function createJob(info, devices, extra){
     linkedJobNumber: (extra&&extra.linked)||""
   });
   for(const d of devices){
+    const tag = d.tag || (normTag(d.tagRaw||"")||null) || await nextTag();
     const base = {
+      tag,
       jobId:jref.id, jobNumber, client:info.client,
       name:d.name, type:d.type||"Motor", deviceCode:d.deviceCode||"OTHER", basePath:d.basePath||(PATHS[d.workflow]?d.workflow:"REWINDING & OVERHAUL"),
       serial:d.serial||"", kw:d.kw||"",
@@ -2151,6 +2193,7 @@ function jobCard(j, archived){
       <div class="sp">
         ${archived?'<span class="archived-note">✓ Archived '+dstr(j.archivedAt)+'</span>'
           : `<button class="btn sm" data-act="po">${j.has_po?'Edit PO':'Add PO'}</button>`}
+        <button class="btn sm" data-act="editjob" title="Edit job info">✎ Edit</button>
         <button class="btn sm danger" data-act="del" title="Delete job">🗑 Delete</button>
       </div>
     </div>
@@ -2164,22 +2207,24 @@ function deviceRow(j,d,archived){
   const idx = st==="archived" ? path.length : path.indexOf(st);
   const bus = path.map((s,i)=>`<i class="${i<idx?'done':(i===idx&&st!=='archived'?'cur':'')}" title="${LBL[s]}"></i>`).join("");
   const t=d.tests||{};
+  const irMin=tt=>{ if(!tt||!tt.ir) return "—"; if(typeof tt.ir==="string") return tt.ir; const vs=["ue","ve","we"].map(k=>parseFloat(tt.ir[k])).filter(x=>!isNaN(x)); return vs.length?Math.min.apply(null,vs):"—"; };
   const chips = [
-    t.initial?`<span class="testchip">Initial IR <b>${esc(t.initial.ir)} MΩ</b> · by ${esc(t.initial.tested_by)}</span>`:"",
-    t.final?`<span class="testchip">Final IR <b>${esc(t.final.ir)} MΩ</b> · by ${esc(t.final.tested_by)}</span>`:"",
+    t.initial?`<span class="testchip">Initial IR <b>${esc(irMin(t.initial))} MΩ</b> · by ${esc(t.initial.tested_by)}</span>`:"",
+    t.final?`<span class="testchip">Final IR <b>${esc(irMin(t.final))} MΩ</b> · by ${esc(t.final.tested_by)}</span>`:"",
     d.quotation?`<span class="testchip">Quotation <b>${fmt(d.quotation.total)} JOD</b>${d.quotation.vat?' incl. 16% VAT':''}</span>`:"",
     d.warranty&&d.warranty.active?`<span class="testchip">Warranty <b>→ ${dstr(d.warranty.end)}</b></span>`:""
   ].join(" ");
   return `<div class="dev" data-d="${d.id}">
     <div class="dev-top">
       <b>${esc(d.name)}</b>
+      ${d.tag?`<span class="mono" style="color:var(--copper-hi);font-size:13px;border:1px solid var(--copper-dim);border-radius:4px;padding:1px 7px">${esc(d.tag)}</span>`:""}
       <span class="wf">${esc(d.workflow)}</span>
       <span class="sn">${esc(d.type)} · S/N ${esc(d.serial)||"—"} ${d.kw?("· "+esc(d.kw)+" kW"):""}</span>
       ${d.warrantyClaim?'<span class="pill wr">warranty job</span>':""}
     </div>
     <div class="bus">${bus}</div>
     <div class="st-label"><b>${st==="archived"?"✓ Archived":LBL[st]}</b><span>step ${Math.min(idx+1,path.length)} of ${path.length}</span></div>
-    <div class="dev-actions">${archived||st==="archived" ? `<button class="btn sm" data-act="report">Service report</button> ${chips}` : stationActions(d)+chips}</div>
+    <div class="dev-actions">${archived||st==="archived" ? `<button class="btn sm" data-act="report">Service report</button> ${chips}` : stationActions(d)+`<button class="btn sm ghost" data-act="editdev" title="Edit device / reopen any step">✎</button>`+chips}</div>
   </div>`;
 }
 
@@ -2187,13 +2232,13 @@ function stationActions(d){
   const s=stationOf(d);
   const adv = `<button class="btn sm primary" data-act="advance">Advance ▸</button>`;
   switch(s){
-    case "missing_parts": return `<button class="btn sm" data-act="missing">Missing parts checklist</button> ${d.missingDone?adv:'<span class="note warn">complete the missing-parts check to advance</span>'}`;
+    case "missing_parts": return `<button class="btn sm" data-act="missing">Missing parts checklist</button> <button class="btn sm" data-act="nameplate">Nameplate</button> ${d.missingDone?adv:'<span class="note warn">complete the missing-parts check to advance</span>'}`;
     case "inspection": return `<button class="btn sm" data-act="findings">Findings checklist</button> ${d.findings&&d.scope?adv:'<span class="note warn">set PASS/DEFECT for every present part to advance</span>'}`;
     case "electrical_test_initial": return `<button class="btn sm" data-act="test-initial">Log initial test</button> <span class="note ${(d.tests&&d.tests.initial)?'':'warn'}">${(d.tests&&d.tests.initial)?'test received — auto-cleared':'waiting for technician bench data'}</span> ${(d.tests&&d.tests.initial)?adv:""}`;
     case "draft_offer": return `<button class="btn sm" data-act="offer">Build offer</button> ${d.offer?adv:'<span class="note warn">create offer or bypass to quotation</span>'}`;
     case "quotation": return `<button class="btn sm" data-act="quote">Finalize quotation</button> ${d.quotation?adv:'<span class="note warn">finalize contract price to advance</span>'}`;
     case "electrical_test_final": return `<button class="btn sm" data-act="test-final">Log final test</button> <span class="note ${(d.tests&&d.tests.final)?'':'warn'}">${(d.tests&&d.tests.final)?'validation received':'waiting for technician validation'}</span> ${(d.tests&&d.tests.final)?adv:""}`;
-    case "transportation": return `<button class="btn sm primary" data-act="warranty">Dispatch · warranty · archive</button> <button class="btn sm" data-act="report">Service report</button>`;
+    case "transportation": return `<button class="btn sm primary" data-act="gowarr">Open in Warranty page ▸</button> <button class="btn sm" data-act="report">Service report</button>`;
     default: return `<button class="btn sm primary" data-act="advance">Mark station complete ▸</button>`;
   }
 }
@@ -2208,12 +2253,16 @@ function bindJobCards(host){
       if(act==="po") return poModal(j);
       if(act==="del") return delJobModal(j);
       if(act==="missing") return missingModal(d);
+      if(act==="nameplate") return npModal(d);
       if(act==="findings") return findingsModal(d);
       if(act==="offer") return offerModal(d,"offer");
       if(act==="quote") return offerModal(d,"quotation");
       if(act==="test-initial") return testModal(d,"initial");
       if(act==="test-final") return testModal(d,"final");
       if(act==="warranty") return warrantyModal(j,d);
+      if(act==="gowarr"){ document.querySelector('.tabs button[data-t="warr"]').click(); return; }
+      if(act==="editjob") return editJobModal(j);
+      if(act==="editdev") return editDevModal(d);
       if(act==="report") return printReport(j,d);
       if(act==="advance") return advance(d);
     };
@@ -2245,6 +2294,31 @@ async function advance(d){
 }
 
 /* ---- modals: findings / PO / solo ---- */
+/* ---- Nameplate data (feeds the technical report header tables) ---- */
+function npModal(d){
+  const n=d.np||{};
+  modal("Nameplate data — "+d.name, `
+    <div class="grid3">
+      <div><label>Type / Frame</label><input id="npFrame" value="${esc(n.frame||"")}" placeholder="YE3-225M-4"></div>
+      <div><label>Voltage / CON</label><input id="npVolt" value="${esc(n.voltcon||"")}" placeholder="400 V / Δ"></div>
+      <div><label>Ampere</label><input id="npAmp" value="${esc(n.amp||"")}" placeholder="66.1 A"></div>
+      <div><label>Speed</label><input id="npSpeed" value="${esc(n.speed||"")}" placeholder="1480 RPM"></div>
+      <div><label>DE BRG</label><input id="npDe" value="${esc(n.debrg||"")}" placeholder="6313-2Z"></div>
+      <div><label>NDE BRG</label><input id="npNde" value="${esc(n.ndebrg||"")}" placeholder="6313-2Z"></div>
+      <div><label>INS. Class</label><input id="npIns" value="${esc(n.inscl||"")}" placeholder="F"></div>
+      <div><label>Maker</label><input id="npMaker" value="${esc(n.maker||"")}" placeholder="XiangTan"></div>
+      <div><label>Note</label><input id="npNote" value="${esc(n.note||"")}"></div>
+    </div>`,
+    [{label:"Save nameplate", cls:"primary", onClick:async()=>{
+      await updateDoc(doc(db,"devices",d.id),{np:{
+        frame:$("#npFrame").value.trim(), voltcon:$("#npVolt").value.trim(), amp:$("#npAmp").value.trim(),
+        speed:$("#npSpeed").value.trim(), debrg:$("#npDe").value.trim(), ndebrg:$("#npNde").value.trim(),
+        inscl:$("#npIns").value.trim(), maker:$("#npMaker").value.trim(), note:$("#npNote").value.trim()
+      }});
+      closeModal(); toast("Nameplate saved");
+    }}]);
+}
+
 /* ---- Step 1: MISSING PARTS CHECKLIST ---- */
 function missingModal(d){
   const p=partsFor(d);
@@ -2327,6 +2401,7 @@ function findingsModal(d){
   const secS=present(p.custom?p.s:p.s), secR=present(p.r);
   const excluded=[].concat(p.s,p.r).filter(n=>(pr[n]||"P")!=="P");
   modal("Findings status — "+d.name+" ("+esc(d.type)+")", `
+    <div style="text-align:right;margin-bottom:4px"><button class="btn sm" id="fAllPass">✓ Set all PASS</button></div>
     ${p.custom?`<div>${rows(secS)}</div>`
       :`<h4 class="psec">${SEC_S}</h4><div>${rows(secS)}</div>
         <h4 class="psec">${SEC_R}</h4><div>${rows(secR)}</div>`}
@@ -2361,6 +2436,16 @@ function findingsModal(d){
       why.onchange=()=>{ $("#fScope").value=autoScope(); };
     });
     $("#fRegen").onclick=()=>{ $("#fScope").value=autoScope(); };
+    $("#fAllPass").onclick=()=>{
+      $("#mdBody").querySelectorAll(".frow").forEach(row=>{
+        const n=row.dataset.p;
+        st[n]=Object.assign(st[n]||{}, {s:"PASS"});
+        row.querySelectorAll(".seg button").forEach(x=>{ x.className = x.dataset.v==="PASS" ? "on ok" : ""; });
+        row.querySelector(".pwhy").classList.add("hidden");
+      });
+      $("#fScope").value=autoScope();
+      toast("All present parts set to PASS — flip any defective ones");
+    };
   }
   bind();
   async function save(){
@@ -2476,7 +2561,111 @@ function warrantyModal(j,d){
     }}]);
 }
 
-/* ---- delete job (PIN-protected) ---- */
+/* ---- edit job info any time ---- */
+function editJobModal(j){
+  modal("Edit job — "+j.jobNumber, `
+    <label>Client name</label><input id="ejClient" value="${esc(j.client)}">
+    <label>Client emails — comma separated</label><input id="ejEmails" value="${esc((j.emails||[]).join(", "))}">`,
+    [{label:"Save changes", cls:"primary", onClick:async()=>{
+      const client=$("#ejClient").value.trim();
+      if(!client) return toast("Client name is required");
+      const emails=$("#ejEmails").value.split(/[\s,;]+/).map(x=>x.trim()).filter(x=>x.indexOf("@")>0);
+      await updateDoc(doc(db,"jobs",j.id),{client, emails});
+      const devs=Object.values(DEVICES).filter(d=>d.jobId===j.id);
+      for(const d of devs) await updateDoc(doc(db,"devices",d.id),{client});
+      closeModal(); toast("Job updated");
+    }}]);
+}
+
+/* ---- edit device any time: fields, workflow, station, reopen any step ---- */
+function editDevModal(d){
+  const wfKnown = !!PATHS[d.workflow];
+  modal("Edit device — "+d.name, `
+    <div class="grid3">
+      <div><label>Device name</label><input id="edName" value="${esc(d.name)}"></div>
+      <div><label>Workshop TAG</label><input id="edTag" class="mono" maxlength="7" value="${esc(d.tag||"")}" placeholder="BB-000"></div>
+      <div><label>Serial no.</label><input id="edSerial" class="mono" value="${esc(d.serial)}"></div>
+    </div>
+    <div class="grid3"><div><label>kW</label><input id="edKw" class="mono" value="${esc(d.kw)}"></div></div>
+    <label>Service / workflow</label>
+    <select id="edWf">${Object.keys(PATHS).map(w=>`<option ${wfKnown&&d.workflow===w?"selected":""}>${w}</option>`).join("")}<option value="OTHER" ${wfKnown?"":"selected"}>OTHER — custom name</option></select>
+    <input id="edWfOther" class="${wfKnown?"hidden":""}" style="margin-top:6px" placeholder="Custom service name" value="${wfKnown?"":esc(d.workflow)}">
+    <label>Current station — move the device to any step</label>
+    <select id="edStation"></select>
+    <label style="margin-top:14px">Reopen any step to edit its data</label>
+    <div class="dev-actions">
+      <button class="btn sm" id="edMissing">Missing parts</button>
+      <button class="btn sm" id="edFind">Findings</button>
+      <button class="btn sm" id="edOffer">Draft offer</button>
+      <button class="btn sm" id="edQuote">Quotation</button>
+      <button class="btn sm" id="edT1">Initial test</button>
+      <button class="btn sm" id="edT2">Final test</button>
+      <button class="btn sm" id="edNp">Nameplate</button>
+    </div>`,
+    [{label:"Save changes", cls:"primary", onClick:async()=>{
+      const wsel=$("#edWf").value;
+      const wname=$("#edWfOther").value.trim();
+      const workflow = wsel==="OTHER" ? (wname||"CUSTOM SERVICE") : wsel;
+      const basePath = wsel==="OTHER" ? (d.basePath&&PATHS[d.basePath]?d.basePath:"REWINDING & OVERHAUL") : wsel;
+      const station=$("#edStation").value;
+      let tag=d.tag||null;
+      const tRaw=$("#edTag").value.trim();
+      if(tRaw){
+        tag=normTag(tRaw);
+        if(!tag) return toast("⛔ TAG must be two letters + three numbers (e.g. BB-000)");
+        if(tag!==d.tag && await tagTaken(tag, d.id)) return toast("⛔ TAG "+tag+" belongs to another machine");
+      }
+      const upd={name:$("#edName").value.trim()||d.name, tag, serial:$("#edSerial").value.trim(), kw:$("#edKw").value.trim(), workflow, basePath};
+      if(station!==d.station){
+        upd.station=station;
+        upd.history=[...(d.history||[]),{station, at:Date.now(), by:me.name, note:"manual edit"}];
+      }
+      await updateDoc(doc(db,"devices",d.id), upd);
+      closeModal(); toast("Device updated");
+    }}]);
+  function fillStations(){
+    const wsel=$("#edWf").value;
+    const p = wsel==="OTHER" ? pathOf(d) : PATHS[wsel];
+    const cur = stationOf(d);
+    $("#edStation").innerHTML = p.map(st=>`<option value="${st}" ${st===cur?"selected":""}>${LBL[st]}</option>`).join("");
+  }
+  $("#edWf").onchange=()=>{ $("#edWfOther").classList.toggle("hidden", $("#edWf").value!=="OTHER"); fillStations(); };
+  fillStations();
+  $("#edMissing").onclick=()=>missingModal(d);
+  $("#edFind").onclick=()=>findingsModal(d);
+  $("#edOffer").onclick=()=>offerModal(d,"offer");
+  $("#edQuote").onclick=()=>offerModal(d,"quotation");
+  $("#edT1").onclick=()=>testModal(d,"initial");
+  $("#edT2").onclick=()=>testModal(d,"final");
+  $("#edNp").onclick=()=>npModal(d);
+}
+
+/* ---- warranty & dispatch desk ---- */
+function renderWarranty(){
+  const host=$("#warrList"); if(!host) return;
+  const items=Object.values(DEVICES).filter(d=>{
+    const j=JOBS[d.jobId];
+    return j && j.status==="active" && stationOf(d)==="transportation";
+  }).sort((a,b)=>a.createdAt-b.createdAt);
+  if(!items.length){ host.innerHTML='<div class="panel"><p class="note">No machines waiting at Transportation. When a device completes Painting, it appears here for warranty activation and dispatch.</p></div>'; return; }
+  host.innerHTML = items.map(d=>{
+    const j=JOBS[d.jobId]||{};
+    return `<div class="job" data-j="${d.jobId}"><div class="dev" data-d="${d.id}">
+      <div class="dev-top">
+        <span class="jn mono" style="color:var(--copper-hi)">${esc(d.jobNumber)}</span>
+        <b>${esc(d.name)}</b>
+        ${d.tag?`<span class="mono" style="color:var(--copper-hi)">[${esc(d.tag)}]</span>`:""}
+        <span class="wf">${esc(d.workflow)}</span>
+        <span class="sn">${esc(d.type)} · S/N ${esc(d.serial)||"—"} · ${esc(j.client||d.client)}</span>
+      </div>
+      <div class="dev-actions">
+        <button class="btn sm primary" data-act="warranty">Set warranty &amp; dispatch</button>
+        <button class="btn sm" data-act="report">Service report</button>
+      </div>
+    </div></div>`;
+  }).join("");
+  bindJobCards(host);
+}
 function delJobModal(j){
   const devs=Object.values(DEVICES).filter(d=>d.jobId===j.id);
   modal("Delete job — "+j.jobNumber, `
@@ -2519,8 +2708,14 @@ $("#scanBtn").onclick = async ()=>{
   const host=$("#scanResult");
   if(!s) return toast("Enter a serial number");
   host.innerHTML='<p class="note" style="margin-top:12px">Scanning device registry…</p>';
+  const list=[]; const seen={};
   const snap=await getDocs(query(collection(db,"devices"), where("serial","==",s)));
-  const list=[]; snap.forEach(x=>list.push({id:x.id,...x.data()}));
+  snap.forEach(x=>{ if(!seen[x.id]){seen[x.id]=1; list.push({id:x.id,...x.data()});} });
+  const t=normTag(s);
+  if(t){
+    const snap2=await getDocs(query(collection(db,"devices"), where("tag","==",t)));
+    snap2.forEach(x=>{ if(!seen[x.id]){seen[x.id]=1; list.push({id:x.id,...x.data()});} });
+  }
   if(!list.length){ host.innerHTML='<p class="note" style="margin-top:12px">No machine with serial <b class="mono">'+esc(s)+'</b> in the registry. Open a normal new job.</p>'; return; }
   list.sort((a,b)=>b.createdAt-a.createdAt);
   const last=list[0];
@@ -2528,7 +2723,7 @@ $("#scanBtn").onclick = async ()=>{
   const inWarranty = w && w.active && w.end > Date.now();
   host.innerHTML = `
     <div class="hist-item">
-      <div><span class="jn">${esc(last.jobNumber)}</span> — <b>${esc(last.name)}</b> · ${esc(last.workflow)} · ${esc(last.client)}</div>
+      <div><span class="jn">${esc(last.jobNumber)}</span> — <b>${esc(last.name)}</b> ${last.tag?'<span class="mono" style="color:var(--copper-hi)">['+esc(last.tag)+']</span>':""} · ${esc(last.workflow)} · ${esc(last.client)}</div>
       <div class="note" style="margin:4px 0">${list.length} visit(s) on record · last dispatched ${dstr(last.archivedAt)}</div>
       <div style="margin:6px 0">${inWarranty
         ? '<span class="wr-ok">● WARRANTY VALID until '+dstr(w.end)+'</span> — identical service scope executes as a warranty claim with no new billing.'
@@ -2543,7 +2738,7 @@ $("#scanBtn").onclick = async ()=>{
     const prevJob = Object.values(JOBS).filter(x=>x.client===last.client && x.emails && x.emails.length).sort((a,b)=>b.createdAt-a.createdAt)[0];
     const jn = await createJob(
       {client:last.client, emails:(prevJob&&prevJob.emails)||[], po: claim ? "WARRANTY-"+(w?dstr(w.start):"") : ""},
-      [{name:last.name, type:last.type, deviceCode:last.deviceCode, serial:last.serial, kw:last.kw, workflow:last.workflow, basePath:last.basePath}],
+      [{name:last.name, type:last.type, deviceCode:last.deviceCode, serial:last.serial, kw:last.kw, workflow:last.workflow, basePath:last.basePath, tag:last.tag||null}],
       {warrantyClaim:claim, linked:last.jobNumber}
     );
     toast((claim?"Warranty claim ":"Linked job ")+jn+" opened");
@@ -2553,60 +2748,125 @@ $("#scanBtn").onclick = async ()=>{
   $("#nlBtn").onclick=()=>mk(false);
 };
 
-/* ---- printable service report ---- */
+/* ---- printable technical report (JISD template layout) ---- */
 function printReport(j,d){
-  const t=d.tests||{};
-  const row=(l,v)=>`<tr><td>${l}</td><td style="font-family:monospace">${esc(v==null?"—":v)}</td></tr>`;
-  const testBlock=(tt,name)=>tt?`<h3>${name} electrical test — by ${esc(tt.tested_by)} · ${dstr(tt.at)}</h3>
-    <table>${row("Insulation resistance (Megger)",tt.ir+" MΩ")}
-    ${row("Winding resistance U–V / V–W / W–U",`${tt.r_uv} / ${tt.r_vw} / ${tt.r_wu} Ω`)}
-    ${row("Resistance unbalance (NEMA)",tt.balance+" %")}
-    ${row("No-load current L1 / L2 / L3",`${tt.i1} / ${tt.i2} / ${tt.i3} A`)}
-    ${tt.notes?row("Notes",tt.notes):""}</table>`:"";
-  const q=d.quotation;
-  const html=`<html><head><title>${esc(j.jobNumber)} — Service report</title><style>
-    body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:40px;font-size:13px}
-    h1{font-size:20px;border-bottom:3px solid #b06a33;padding-bottom:8px}
-    h1 small{display:block;font-size:11px;color:#555;font-weight:normal;letter-spacing:.1em}
-    h3{margin:18px 0 6px;font-size:14px;color:#7a4a20}
-    table{border-collapse:collapse;width:100%}
-    td,th{border:1px solid #bbb;padding:6px 9px;text-align:left}
-    .meta td{border:0;padding:2px 0}
-  </style></head><body>
-  <h1>JORDAN INVESTMENT &amp; SOUTHERN DEVELOPMENT CO.<small>ELECTRICAL MOTOR &amp; GENERATOR REPAIR WORKSHOP — SERVICE REPORT</small></h1>
-  <table class="meta"><tr><td><b>Job No:</b> ${esc(j.jobNumber)}</td><td><b>Client:</b> ${esc(j.client)}</td><td><b>PO:</b> ${esc(j.po_number||"—")}</td></tr>
-  <tr><td><b>Device:</b> ${esc(d.name)} (${esc(d.type)})</td><td><b>Serial:</b> ${esc(d.serial)}</td><td><b>Rating:</b> ${esc(d.kw)||"—"} kW</td></tr>
-  <tr><td><b>Scope:</b> ${esc(d.workflow)}</td><td><b>Received:</b> ${dstr(d.createdAt)}</td><td><b>Dispatched:</b> ${dstr(d.archivedAt)}</td></tr>
-  ${j.emails&&j.emails.length?`<tr><td colspan="3"><b>Client emails:</b> ${esc(j.emails.join(", "))}</td></tr>`:""}</table>
-  ${(function(){
-    const p=partsFor(d), pr=d.partsPresence||{}, st=d.partStatus||{};
-    const all=[].concat(p.s,p.r);
-    if(!all.length) return "<h3>Inspection findings</h3><p>"+(esc(d.findings)||"—")+"</p>";
-    const miss=all.filter(n=>(pr[n]||"P")!=="P");
-    let h="";
-    if(miss.length){
-      h+="<h3>Missing / non-existent parts at reception</h3><table><tr><th>Part</th><th>Condition</th></tr>";
-      miss.forEach(n=>{ h+="<tr><td>"+esc(n)+"</td><td>"+((pr[n]==="M")?"MISSING":"NOT EXIST")+"</td></tr>"; });
-      h+="</table>";
+  const t=d.tests||{}, np=d.np||{};
+  const cell=(v)=>esc(v==null||v===""?"—":v);
+  function testSection(tt, name, vibOff){
+    if(!tt) return "";
+    if(typeof tt.ir==="string"){ /* legacy format */
+      return `<h3>${name} electrical test — by ${esc(tt.tested_by)} · ${dstr(tt.at)}</h3>
+      <table><tr><td>Insulation resistance</td><td>${cell(tt.ir)} MΩ</td></tr>
+      <tr><td>Winding resistance U–V / V–W / W–U</td><td>${cell(tt.r_uv)} / ${cell(tt.r_vw)} / ${cell(tt.r_wu)} Ω</td></tr>
+      <tr><td>No-load current L1 / L2 / L3</td><td>${cell(tt.i1)} / ${cell(tt.i2)} / ${cell(tt.i3)} A</td></tr></table>`;
     }
-    h+="<h3>Findings status checklist</h3><table><tr><th>Part</th><th>Result</th><th>Remarks</th></tr>";
-    all.filter(n=>(pr[n]||"P")==="P").forEach(n=>{
-      const v=st[n]||{};
-      h+="<tr><td>"+esc(n)+"</td><td>"+(v.s||"—")+"</td><td>"+esc(v.why||"")+"</td></tr>";
+    const ir=tt.ir||{}, r=tt.r||{}, v=tt.v||{}, cu=tt.i||{}, vb=tt.vib||{};
+    const hasVib=!vibOff && ["deh","dev","dea","ndeh","ndev","ndea"].some(k=>vb[k]);
+    return `
+    <h3>${name} test record — tested by ${esc(tt.tested_by)} · ${dstr(tt.at)}</h3>
+    <table>
+      <tr><th colspan="7">Insulation resistance — Megger (MΩ)</th></tr>
+      <tr><td></td><td><b>U–E</b></td><td><b>V–E</b></td><td><b>W–E</b></td><td><b>U–V</b></td><td><b>V–W</b></td><td><b>W–U</b></td></tr>
+      <tr><td>IR</td><td>${cell(ir.ue)}</td><td>${cell(ir.ve)}</td><td>${cell(ir.we)}</td><td>${cell(ir.uv)}</td><td>${cell(ir.vw)}</td><td>${cell(ir.wu)}</td></tr>
+    </table>
+    <table style="margin-top:6px">
+      <tr><th colspan="4">Stator winding resistance (Ω)</th></tr>
+      <tr><td><b>U–V</b></td><td><b>V–W</b></td><td><b>W–U</b></td><td><b>Unbalance</b></td></tr>
+      <tr><td>${cell(r.uv)}</td><td>${cell(r.vw)}</td><td>${cell(r.wu)}</td><td>${cell(tt.balance)} %</td></tr>
+    </table>
+    <table style="margin-top:6px">
+      <tr><th colspan="7">Run readings</th></tr>
+      <tr><td></td><td><b>V L1–L2</b></td><td><b>V L2–L3</b></td><td><b>V L1–L3</b></td><td><b>I L1</b></td><td><b>I L2</b></td><td><b>I L3</b></td></tr>
+      <tr><td>${cell(tt.rpm)} RPM</td><td>${cell(v.l12)} V</td><td>${cell(v.l23)} V</td><td>${cell(v.l13)} V</td><td>${cell(cu.l1)} A</td><td>${cell(cu.l2)} A</td><td>${cell(cu.l3)} A</td></tr>
+    </table>
+    ${hasVib?`<table style="margin-top:6px">
+      <tr><th colspan="4">Vibration record (mm/s ${tt.vibUnit==="PEAK"?"Peak":"RMS"})</th></tr>
+      <tr><td></td><td><b>Horizontal</b></td><td><b>Vertical</b></td><td><b>Axial</b></td></tr>
+      <tr><td><b>DE</b></td><td>${cell(vb.deh)}</td><td>${cell(vb.dev)}</td><td>${cell(vb.dea)}</td></tr>
+      <tr><td><b>NDE</b></td><td>${cell(vb.ndeh)}</td><td>${cell(vb.ndev)}</td><td>${cell(vb.ndea)}</td></tr>
+    </table>`:""}
+    ${tt.notes?`<p style="margin-top:4px"><b>Notes:</b> ${esc(tt.notes)}</p>`:""}`;
+  }
+  const p=partsFor(d), pr=d.partsPresence||{}, st2=d.partStatus||{};
+  const allParts=[].concat(p.s,p.r);
+  const miss=allParts.filter(n=>(pr[n]||"P")!=="P");
+  let findingsHtml="";
+  if(allParts.length){
+    if(miss.length){
+      findingsHtml+=`<h3>1.1 · Missing / non-existent parts at reception</h3><table><tr><th>Part</th><th>Condition</th></tr>`;
+      miss.forEach(n=>{ findingsHtml+=`<tr><td>${esc(n)}</td><td>${(pr[n]==="M")?"MISSING":"NOT EXIST"}</td></tr>`; });
+      findingsHtml+="</table>";
+    }
+    findingsHtml+=`<h3>1.2 · Findings status checklist</h3><table><tr><th>Part</th><th>Result</th><th>Remarks</th></tr>`;
+    allParts.filter(n=>(pr[n]||"P")==="P").forEach(n=>{
+      const x=st2[n]||{};
+      findingsHtml+=`<tr><td>${esc(n)}</td><td>${x.s||"—"}</td><td>${esc(x.why||"")}</td></tr>`;
     });
-    h+="</table>";
-    return h;
-  })()}
-  <h3>Scope of work</h3><p style="white-space:pre-line">${esc(d.scope)||"—"}</p>
-  ${testBlock(t.initial,"Initial")} ${testBlock(t.final,"Final")}
-  ${(t.final&&(t.final.rpm||t.final.vib))?`<h3>Solo run</h3><table>${row("Speed",(t.final.rpm||"—")+" RPM")}${row("Vibration",(t.final.vib||"—")+" mm/s RMS")}</table>`:(d.soloRun?`<h3>Solo run</h3><table>${row("Speed",d.soloRun.rpm+" RPM")}${row("Vibration",d.soloRun.vib+" mm/s RMS")}${d.soloRun.notes?row("Notes",d.soloRun.notes):""}</table>`:"")}
-  ${q?`<h3>Commercial summary</h3><table><tr><th>Item</th><th>Qty</th><th>Unit (JOD)</th><th>Amount</th></tr>
+    findingsHtml+="</table>";
+  } else {
+    findingsHtml=`<h3>1.1 · Inspection findings</h3><p>${esc(d.findings)||"—"}</p>`;
+  }
+  const q=d.quotation;
+  const html=`<html><head><title>${esc(j.jobNumber)} — Technical report</title><style>
+    body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:36px;font-size:12.5px}
+    .band{border-bottom:4px solid #b06a33;padding-bottom:8px;margin-bottom:14px;display:flex;align-items:center;gap:14px}
+    .band .mk{border:2.5px solid #b06a33;color:#b06a33;font-weight:800;font-size:16px;border-radius:6px;padding:6px 10px;letter-spacing:.05em}
+    .band h1{font-size:17px;margin:0;letter-spacing:.03em}
+    .band h1 small{display:block;font-size:10px;color:#666;font-weight:normal;letter-spacing:.14em}
+    h2{font-size:14px;margin:20px 0 6px;color:#7a4a20;border-bottom:1.5px solid #d9c4ab;padding-bottom:3px;text-transform:uppercase;letter-spacing:.05em}
+    h3{margin:12px 0 5px;font-size:12.5px;color:#7a4a20}
+    table{border-collapse:collapse;width:100%}
+    td,th{border:1px solid #999;padding:5px 8px;text-align:left;vertical-align:top}
+    th{background:#f2e8dc}
+    .hd td b{color:#333}
+    .np td:first-child{width:22%;background:#faf6f0;font-weight:bold}
+    .sig{margin-top:44px;display:flex;justify-content:space-between;font-size:12px}
+    .sig div{width:30%;border-top:1px solid #333;padding-top:5px;text-align:center}
+    @media print{body{margin:16mm}}
+  </style></head><body>
+  <div class="band"><span class="mk">JISD</span>
+    <h1>FINAL TECHNICAL REPORT<small>JORDAN INVESTMENT &amp; SOUTHERN DEVELOPMENT CO. — ELECTRICAL MOTOR &amp; GENERATOR REPAIR WORKSHOP</small></h1></div>
+
+  <table class="hd">
+    <tr><td><b>JISD Ref #</b></td><td>${esc(j.jobNumber)}</td><td><b>Machine Type</b></td><td>${esc(d.deviceCode&&d.deviceCode!=="OTHER"?d.deviceCode:d.type)}</td></tr>
+    <tr><td><b>Attention / Client</b></td><td>${esc(j.client)}</td><td><b>Service Type</b></td><td>${esc(d.workflow)}</td></tr>
+    <tr><td><b>P.O. Number</b></td><td>${esc(j.po_number)||"Not published yet"}</td><td><b>Date</b></td><td>${dstr(Date.now())}</td></tr>
+  </table>
+
+  <h2>Machine data</h2>
+  <table class="np">
+    <tr><td>Type / Frame</td><td colspan="3">${cell(np.frame)}</td></tr>
+    <tr><td>Serial Number (S/N)</td><td>${cell(d.serial)}</td><td style="width:14%;background:#faf6f0"><b>TAG</b></td><td>${cell(d.tag)}</td></tr>
+    <tr><td>Power</td><td>${cell(d.kw?d.kw+" KW":np.power)}</td><td style="background:#faf6f0"><b>DE BRG</b></td><td>${cell(np.debrg)}</td></tr>
+    <tr><td>Voltage / CON</td><td>${cell(np.voltcon)}</td><td style="background:#faf6f0"><b>NDE BRG</b></td><td>${cell(np.ndebrg)}</td></tr>
+    <tr><td>Ampere</td><td>${cell(np.amp)}</td><td style="background:#faf6f0"><b>INS.Cl</b></td><td>${cell(np.inscl)}</td></tr>
+    <tr><td>Speed</td><td>${cell(np.speed)}</td><td style="background:#faf6f0"><b>Maker</b></td><td>${cell(np.maker)}</td></tr>
+    <tr><td>Note</td><td colspan="3">${cell(np.note)}</td></tr>
+  </table>
+
+  <h2>Section 1 — Workshop findings &amp; scope of work</h2>
+  ${findingsHtml}
+  <h3>1.3 · Scope of work performed</h3><p style="white-space:pre-line">${esc(d.scope)||"—"}</p>
+
+  <h2>Section 2 — Electrical test records</h2>
+  ${testSection(t.initial,"2.1 · Initial (as received)", !!(d.vibOff&&d.vibOff.initial))}
+  ${testSection(t.final,"2.2 · Final (after service)", !!(d.vibOff&&d.vibOff.final))}
+
+  ${q?`<h2>Commercial summary</h2><table><tr><th>Item</th><th>Qty</th><th>Unit (JOD)</th><th>Amount</th></tr>
     ${q.rows.map(r=>`<tr><td>${esc(r.desc)}</td><td>${r.qty}</td><td>${fmt(r.price)}</td><td>${fmt(r.qty*r.price)}</td></tr>`).join("")}
     <tr><td colspan="3"><b>Subtotal</b></td><td>${fmt(q.subtotal)}</td></tr>
     ${q.vat?`<tr><td colspan="3"><b>VAT 16%</b></td><td>${fmt(q.subtotal*0.16)}</td></tr>`:""}
     <tr><td colspan="3"><b>TOTAL</b></td><td><b>${fmt(q.total)} JOD</b></td></tr></table>`:""}
-  ${d.warranty&&d.warranty.active?`<h3>Warranty</h3><p>${d.warranty.months} months — valid until <b>${dstr(d.warranty.end)}</b></p>`:""}
-  <p style="margin-top:40px">Prepared by: ____________________ &nbsp;&nbsp;&nbsp; Approved: Eng. Abdallah Dmour &nbsp;&nbsp;&nbsp; Date: ${dstr(Date.now())}</p>
+
+  <h2>Overall view</h2>
+  <p>${(t.final)?"Machine tested and released in good condition.":"—"}
+  ${d.warranty&&d.warranty.active?` Warranty: <b>${d.warranty.months} months</b> — valid until <b>${dstr(d.warranty.end)}</b>.`:""}</p>
+
+  <div class="sig">
+    <div>Tested by<br>${esc((t.final&&t.final.tested_by)||(t.initial&&t.initial.tested_by)||"")}</div>
+    <div>Approved by<br>Eng. Abdallah H. Dmour</div>
+    <div>Date<br>${dstr(Date.now())}</div>
+  </div>
   <script>window.print()<\/script></body></html>`;
   const w=window.open("about:blank","_blank"); w.document.write(html); w.document.close();
 }
@@ -2650,7 +2910,7 @@ function renderTech(list){
     const phase = d.station==="electrical_test_initial"?"initial":"final";
     return `<div class="tech-card" data-d="${d.id}">
       <span class="jn">${esc(d.jobNumber)} · ${esc(d.client)}</span>
-      <h3>${esc(d.name)}</h3>
+      <h3>${esc(d.name)} ${d.tag?'<span class="mono" style="font-size:15px;color:var(--copper-hi)">['+esc(d.tag)+']</span>':""}</h3>
       <div class="sn note mono">S/N ${esc(d.serial)||"—"} ${d.kw?("· "+esc(d.kw)+" kW"):""} · ${esc(d.workflow)}</div>
       <span class="stage">${phase==="initial"?"INITIAL TEST":"FINAL VALIDATION"}</span>
       <div class="test-host"></div>
@@ -2663,58 +2923,115 @@ function renderTech(list){
   });
 }
 
-/* shared test form (technician inline / master modal) */
+/* shared test form (technician inline / master modal) — Section 2 layout */
 function buildTestForm(host, d, phase, autoAdvance){
   const t=(d.tests&&d.tests[phase])||{};
+  const vibOff = !!(d.vibOff && d.vibOff[phase]);
+  const vibUnit = (d.vibUnit && d.vibUnit[phase]) || (t.vibUnit) || "RMS";
+  const ir=t.ir&&typeof t.ir==="object"?t.ir:{};
+  const legacyIr=typeof t.ir==="string"?t.ir:"";
+  const r=t.r||{uv:t.r_uv||"",vw:t.r_vw||"",wu:t.r_wu||""};
+  const v=t.v||{};
+  const cu=t.i||{l1:t.i1||"",l2:t.i2||"",l3:t.i3||""};
+  const vb=t.vib&&typeof t.vib==="object"?t.vib:{};
+  const IN=(cls,val,ph)=>`<input class="${cls}" inputmode="decimal" value="${esc(val||"")}" placeholder="${ph}">`;
   host.innerHTML=`
-    <div class="grid2">
-      <div><label>Insulation resistance — Megger (MΩ)</label><input class="tf-ir" inputmode="decimal" value="${esc(t.ir||"")}" placeholder="e.g. 2500"></div>
-      <div><label>No-load current L1 / L2 / L3 (A)</label>
-        <div style="display:flex;gap:6px">
-          <input class="tf-i1" inputmode="decimal" value="${esc(t.i1||"")}" placeholder="L1">
-          <input class="tf-i2" inputmode="decimal" value="${esc(t.i2||"")}" placeholder="L2">
-          <input class="tf-i3" inputmode="decimal" value="${esc(t.i3||"")}" placeholder="L3"></div></div>
+    <h4 class="psec">Insulation resistance — Megger (MΩ) · six readings</h4>
+    <div class="grid3">
+      <div><label>U — E</label>${IN("tf-iue",ir.ue||legacyIr,"MΩ")}</div>
+      <div><label>V — E</label>${IN("tf-ive",ir.ve,"MΩ")}</div>
+      <div><label>W — E</label>${IN("tf-iwe",ir.we,"MΩ")}</div>
+      <div><label>U — V</label>${IN("tf-iuv",ir.uv,"MΩ")}</div>
+      <div><label>V — W</label>${IN("tf-ivw",ir.vw,"MΩ")}</div>
+      <div><label>W — U</label>${IN("tf-iwu",ir.wu,"MΩ")}</div>
     </div>
-    <label>Stator winding resistance U–V / V–W / W–U (Ω)</label>
-    <div style="display:flex;gap:6px">
-      <input class="tf-ruv" inputmode="decimal" value="${esc(t.r_uv||"")}" placeholder="U–V">
-      <input class="tf-rvw" inputmode="decimal" value="${esc(t.r_vw||"")}" placeholder="V–W">
-      <input class="tf-rwu" inputmode="decimal" value="${esc(t.r_wu||"")}" placeholder="W–U"></div>
+    <h4 class="psec">Stator winding resistance (Ω)</h4>
+    <div class="grid3">
+      <div><label>U — V</label>${IN("tf-ruv",r.uv,"Ω")}</div>
+      <div><label>V — W</label>${IN("tf-rvw",r.vw,"Ω")}</div>
+      <div><label>W — U</label>${IN("tf-rwu",r.wu,"Ω")}</div>
+    </div>
     <div class="bal" data-bal>Resistance balance: —</div>
-    ${phase==="final"?`
-    <label>Solo run — speed (RPM) / vibration (mm/s RMS)</label>
-    <div style="display:flex;gap:6px">
-      <input class="tf-rpm" inputmode="decimal" value="${esc(t.rpm||"")}" placeholder="RPM">
-      <input class="tf-vib" inputmode="decimal" value="${esc(t.vib||"")}" placeholder="mm/s RMS"></div>`:""}
+    <h4 class="psec">Run readings — voltage (V) / current (A) / speed</h4>
+    <div class="grid3">
+      <div><label>V · L1–L2</label>${IN("tf-v12",v.l12,"V")}</div>
+      <div><label>V · L2–L3</label>${IN("tf-v23",v.l23,"V")}</div>
+      <div><label>V · L1–L3</label>${IN("tf-v13",v.l13,"V")}</div>
+      <div><label>I · L1</label>${IN("tf-i1",cu.l1,"A")}</div>
+      <div><label>I · L2</label>${IN("tf-i2",cu.l2,"A")}</div>
+      <div><label>I · L3</label>${IN("tf-i3",cu.l3,"A")}</div>
+    </div>
+    <div class="grid3"><div><label>Speed (RPM)</label>${IN("tf-rpm",t.rpm,"RPM")}</div></div>
+    <h4 class="psec" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+      <span>Vibration record (mm/s ${vibUnit==="PEAK"?"Peak":"RMS"}) · DE / NDE × H / V / A</span>
+      <span style="display:flex;gap:6px;align-items:center">
+        ${(me&&me.role==="master"&&!vibOff)?`<span class="seg"><button type="button" data-u="RMS" class="tf-vunit ${vibUnit==="RMS"?"on ok":""}">RMS</button><button type="button" data-u="PEAK" class="tf-vunit ${vibUnit==="PEAK"?"on ok":""}">Peak</button></span>`:""}
+        ${(me&&me.role==="master")?`<button type="button" class="btn sm ${vibOff?"":"ghost"} tf-vibtoggle">${vibOff?"⊘ Disabled — click to enable":"Disable for this test"}</button>`:""}
+      </span>
+    </h4>
+    ${vibOff?`<p class="note" style="margin-bottom:6px">Vibration record disabled by master — it will not appear on the final report for this ${phase} test.</p>`:`
+    <div class="grid3">
+      <div><label>DE — Horizontal</label>${IN("tf-vdeh",vb.deh,"mm/s "+(vibUnit==="PEAK"?"Peak":"RMS"))}</div>
+      <div><label>DE — Vertical</label>${IN("tf-vdev",vb.dev,"mm/s "+(vibUnit==="PEAK"?"Peak":"RMS"))}</div>
+      <div><label>DE — Axial</label>${IN("tf-vdea",vb.dea,"mm/s "+(vibUnit==="PEAK"?"Peak":"RMS"))}</div>
+      <div><label>NDE — Horizontal</label>${IN("tf-vndeh",vb.ndeh,"mm/s "+(vibUnit==="PEAK"?"Peak":"RMS"))}</div>
+      <div><label>NDE — Vertical</label>${IN("tf-vndev",vb.ndev,"mm/s "+(vibUnit==="PEAK"?"Peak":"RMS"))}</div>
+      <div><label>NDE — Axial</label>${IN("tf-vndea",vb.ndea,"mm/s "+(vibUnit==="PEAK"?"Peak":"RMS"))}</div>
+    </div>`}
     <label>Notes</label><input class="tf-n" value="${esc(t.notes||"")}" placeholder="optional">
-    <div style="margin-top:14px"><button class="btn primary tf-save">Submit test results</button></div>`;
+    <div style="margin-top:14px"><button class="btn primary tf-save">Submit ${phase==="initial"?"initial":"final"} test</button></div>`;
   const balEl=host.querySelector("[data-bal]");
   const rIn=[".tf-ruv",".tf-rvw",".tf-rwu"].map(c=>host.querySelector(c));
   function bal(){
-    const v=rIn.map(i=>parseFloat(i.value)).filter(x=>!isNaN(x)&&x>0);
-    if(v.length<3){ balEl.textContent="Resistance balance: —"; balEl.className="bal"; return null; }
-    const avg=v.reduce((a,b)=>a+b)/3;
-    const dev=Math.max(...v.map(x=>Math.abs(x-avg)))/avg*100; // NEMA max deviation from average
+    const vals=rIn.map(i=>parseFloat(i.value)).filter(x=>!isNaN(x)&&x>0);
+    if(vals.length<3){ balEl.textContent="Resistance balance: —"; balEl.className="bal"; return null; }
+    const avg=vals.reduce((a,b)=>a+b)/3;
+    const dev=Math.max(...vals.map(x=>Math.abs(x-avg)))/avg*100;
     balEl.textContent="Resistance unbalance (NEMA): "+dev.toFixed(2)+" % "+(dev<=2?"✓ within 2% limit":"⚠ exceeds 2% limit");
     balEl.className="bal "+(dev<=2?"ok":"bad");
     return dev.toFixed(2);
   }
   rIn.forEach(i=>i.oninput=bal); bal();
+  host.querySelectorAll(".tf-vunit").forEach(b=>{
+    b.onclick=async ()=>{
+      const u=b.dataset.u;
+      if(u===vibUnit) return;
+      await updateDoc(doc(db,"devices",d.id),{["vibUnit."+phase]: u});
+      d.vibUnit=Object.assign({}, d.vibUnit||{}); d.vibUnit[phase]=u;
+      buildTestForm(host, d, phase, autoAdvance);
+      toast("Vibration values recorded as mm/s "+(u==="PEAK"?"Peak":"RMS"));
+    };
+  });
+  const vt=host.querySelector(".tf-vibtoggle");
+  if(vt) vt.onclick=async ()=>{
+    const nv=!vibOff;
+    await updateDoc(doc(db,"devices",d.id),{["vibOff."+phase]: nv});
+    d.vibOff=Object.assign({}, d.vibOff||{}); d.vibOff[phase]=nv;
+    buildTestForm(host, d, phase, autoAdvance);
+    toast(nv?"Vibration record disabled for the "+phase+" test":"Vibration record enabled");
+  };
   host.querySelector(".tf-save").onclick=async ()=>{
     const tester = (me && me.role==="technician") ? window.TESTER : (me && me.name);
     if(!tester) return toast("⛔ Select who is testing first — top of the screen");
     const g=c=>host.querySelector(c).value.trim();
-    if(!g(".tf-ir")||!g(".tf-ruv")||!g(".tf-rvw")||!g(".tf-rwu")) return toast("IR and all three winding resistances are required");
-    const payload={ir:g(".tf-ir"), r_uv:g(".tf-ruv"), r_vw:g(".tf-rvw"), r_wu:g(".tf-rwu"),
-      i1:g(".tf-i1"), i2:g(".tf-i2"), i3:g(".tf-i3"), balance:bal()||"", notes:g(".tf-n"),
-      tested_by: tester, at: Date.now()};
-    if(phase==="final"){ payload.rpm=g(".tf-rpm"); payload.vib=g(".tf-vib"); }
+    if(!g(".tf-iue")||!g(".tf-ive")||!g(".tf-iwe")) return toast("⛔ The three phase-to-earth IR readings are required");
+    if(!g(".tf-ruv")||!g(".tf-rvw")||!g(".tf-rwu")) return toast("⛔ All three winding resistances are required");
+    const payload={
+      ir:{ue:g(".tf-iue"), ve:g(".tf-ive"), we:g(".tf-iwe"), uv:g(".tf-iuv"), vw:g(".tf-ivw"), wu:g(".tf-iwu")},
+      r:{uv:g(".tf-ruv"), vw:g(".tf-rvw"), wu:g(".tf-rwu")},
+      v:{l12:g(".tf-v12"), l23:g(".tf-v23"), l13:g(".tf-v13")},
+      i:{l1:g(".tf-i1"), l2:g(".tf-i2"), l3:g(".tf-i3")},
+      vib: vibOff ? null : {deh:g(".tf-vdeh"), dev:g(".tf-vdev"), dea:g(".tf-vdea"), ndeh:g(".tf-vndeh"), ndev:g(".tf-vndev"), ndea:g(".tf-vndea")},
+      vibUnit: vibOff ? null : vibUnit,
+      rpm:g(".tf-rpm"), balance:bal()||"", notes:g(".tf-n"),
+      tested_by: tester, at: Date.now()
+    };
     const upd={ ["tests."+phase]: payload };
     if(autoAdvance){
       const path=pathOf(d); const i=path.indexOf(d.station);
       if(i>-1 && i<path.length-1){
         upd.station=path[i+1];
-        upd.history=[...(d.history||[]),{station:path[i+1],at:Date.now(),by:me.name,note:phase+" test submitted"}];
+        upd.history=[...(d.history||[]),{station:path[i+1],at:Date.now(),by:tester,note:phase+" test submitted"}];
       }
     }
     await updateDoc(doc(db,"devices",d.id), upd);
@@ -2755,7 +3072,7 @@ function startDash(){
       const items=active.filter(d=>dashStation(d)===st && (!jn[d.jobId] || jn[d.jobId].status==="active"));
       const n=DASH_ORDER.indexOf(st)+1;
       return `<div class="kcol"><div class="khd">${dlbl(st)}<span>${items.length}</span></div><div class="kbd">
-        ${items.map(d=>`<div class="kchip"><span class="jn">${esc(d.jobNumber)}</span><b>${esc(d.name)}</b><div class="note" style="font-size:11px">${esc(d.client)}</div></div>`).join("")||('<div class="kempty">'+(LANG==="ar"?AR_UI.clear:"station clear")+'</div>')}
+        ${items.map(d=>`<div class="kchip"><span class="jn">${esc(d.jobNumber)}${d.tag?" · "+esc(d.tag):""}</span><b>${esc(d.name)}</b><div class="note" style="font-size:11px">${esc(d.client)}</div></div>`).join("")||('<div class="kempty">'+(LANG==="ar"?AR_UI.clear:"station clear")+'</div>')}
         <div class="knum">${String(n).padStart(2,"0")}</div>
       </div></div>`;
     }).join("");
