@@ -88,9 +88,10 @@ label{display:block;font-size:12px;color:var(--muted);margin:10px 0 4px;text-tra
 
 /* ---------- layout ---------- */
 .wrap{max-width:1200px;margin:0 auto;padding:18px}
-.tabs{display:flex;gap:6px;margin:4px 0 18px;flex-wrap:wrap}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;position:sticky;top:62px;z-index:30;background:var(--bg);padding:10px 0 12px;margin:-6px 0 12px}
 .tabs button{padding:9px 16px;border-radius:8px;border:1px solid var(--line);color:var(--muted);font-family:"Saira Condensed";font-size:15px;letter-spacing:.06em;text-transform:uppercase}
-.tabs button.on{border-color:var(--copper);color:var(--copper-hi);background:rgba(217,142,82,.08)}
+.tabs button{background:var(--panel)}
+.tabs button.on{border-color:var(--copper);color:var(--copper-hi);background:rgba(217,142,82,.12)}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:18px;margin-bottom:16px}
 .panel h2{font-size:19px;margin-bottom:10px;color:var(--copper-hi)}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
@@ -244,7 +245,7 @@ body.has-po .credit{bottom:44px}
     <button class="theme-btn login-theme" title="Light / dark">☀</button>
     <div class="login-hd">
       <h1>JISD <em>Workshop OS</em></h1>
-      <p>Jordan Investment &amp; Southern Development Co. <span style="float:right;color:var(--copper)">v5.6</span></p>
+      <p>Jordan Investment &amp; Southern Development Co. <span style="float:right;color:var(--copper)">v6.1</span></p>
     </div>
     <div class="login-bd">
       <label id="opLabel">Select operator</label>
@@ -273,6 +274,7 @@ body.has-po .credit{bottom:44px}
       <button data-t="jobs" class="on">Active jobs</button>
       <button data-t="new">New job</button>
       <button data-t="scan">Re-entry scan</button>
+      <button data-t="trans">Transportation</button>
       <button data-t="warr">Warranty</button>
       <button data-t="arch">Archive</button>
     </div>
@@ -318,10 +320,17 @@ body.has-po .credit{bottom:44px}
       </div>
     </div>
 
+    <div id="tab-trans" class="hidden">
+      <div class="panel">
+        <h2>Transportation &amp; dispatch desk</h2>
+        <p class="note">Every machine that reaches the Transportation station lands here. Set its warranty window, activate the authorization, and dispatch it to the archive.</p>
+      </div>
+      <div id="transList"></div>
+    </div>
     <div id="tab-warr" class="hidden">
       <div class="panel">
-        <h2>Warranty &amp; dispatch desk</h2>
-        <p class="note">Every machine that reaches the Transportation station lands here. Set its warranty window, activate the authorization, and dispatch it to the archive.</p>
+        <h2>Active warranty registry</h2>
+        <p class="note">All dispatched machines with a running warranty, sorted by nearest expiry. Use the Re-entry scan when one of them comes back.</p>
       </div>
       <div id="warrList"></div>
     </div>
@@ -1748,6 +1757,7 @@ function loadFirebase(){
     app  = initializeApp(firebaseConfig);
     auth = getAuth(app);
     db   = getFirestore(app);
+    try{ await setPersistence(auth, browserLocalPersistence); }catch(e){}
     onAuthStateChanged(auth, async user=>{
       if(SEEDING) return;
       clearSubs();
@@ -1791,7 +1801,7 @@ const LBL = {
   missing_parts:"Missing parts check", inspection:"Findings status", electrical_test_initial:"Electrical test — initial", draft_offer:"Draft offer",
   quotation:"Quotation", clean_and_dry:"Clean & dry", electrical_section:"Electrical section (rewinding)",
   mechanical_section:"Mechanical section", assembly:"Assembly", electrical_test_final:"Final test & solo run",
-  solo_run:"Solo run", painting:"Painting", transportation:"Transportation", archived:"Archived"
+  solo_run:"Solo run", painting:"Painting", transportation:"Transportation", departed:"Left workshop — awaiting warranty", archived:"Archived"
 };
 const KANBAN_ORDER = ["missing_parts","inspection","electrical_test_initial","draft_offer","quotation","clean_and_dry","electrical_section","mechanical_section","assembly","electrical_test_final","painting","transportation"];
 const DASH_ORDER = ["inspection","electrical_test_initial","draft_offer","quotation","electrical_section","mechanical_section","clean_and_dry","assembly","electrical_test_final","painting","transportation"];
@@ -1854,7 +1864,7 @@ const PARTS = {
 function pathOf(d){ return PATHS[d.workflow] || PATHS[d.basePath] || PATHS["REWINDING & OVERHAUL"]; }
 function stationOf(d){
   const p=pathOf(d);
-  if(d.station==="archived" || p.indexOf(d.station)>-1) return d.station;
+  if(d.station==="archived" || d.station==="departed" || p.indexOf(d.station)>-1) return d.station;
   if(d.station==="solo_run") return p[p.indexOf("electrical_test_final")+1] || "transportation";
   return p[0];
 }
@@ -1979,7 +1989,7 @@ document.querySelectorAll(".tabs button").forEach(b=>{
   b.onclick=()=>{
     document.querySelectorAll(".tabs button").forEach(x=>x.classList.remove("on"));
     b.classList.add("on");
-    ["jobs","new","scan","warr","arch"].forEach(t=>$("#tab-"+t).classList.toggle("hidden", t!==b.dataset.t));
+    ["jobs","new","scan","trans","warr","arch"].forEach(t=>$("#tab-"+t).classList.toggle("hidden", t!==b.dataset.t));
   };
 });
 
@@ -2006,11 +2016,11 @@ function startMaster(){
   if(!$("#njDevices").children.length) addDevRow();
   const uj = onSnapshot(collection(db,"jobs"), s=>{
     JOBS={}; s.forEach(d=>JOBS[d.id]={id:d.id,...d.data()});
-    renderJobs(); renderArchive(); renderPOBanner(); refreshClientMemory(); renderWarranty();
+    renderJobs(); renderArchive(); renderPOBanner(); refreshClientMemory(); renderTransport(); renderWarranty();
   });
   const ud = onSnapshot(collection(db,"devices"), s=>{
     DEVICES={}; s.forEach(d=>DEVICES[d.id]={id:d.id,...d.data()});
-    renderJobs(); renderArchive(); renderWarranty();
+    renderJobs(); renderArchive(); renderTransport(); renderWarranty();
   });
   unsubs.push(uj,ud);
 }
@@ -2026,7 +2036,7 @@ function addDevRow(pre){
     </div>
     <input placeholder="TAG (auto: AA-000)" class="d-tag mono" maxlength="7" value="${esc(pre&&pre.tag||"")}">
     <input placeholder="Serial no." class="d-serial mono" value="${esc(pre&&pre.serial||"")}">
-    <input placeholder="kW" class="d-kw mono" value="${esc(pre&&pre.kw||"")}">
+    <input placeholder="kW" class="d-kw mono" inputmode="decimal" value="${esc(pre&&pre.kw||"")}">
     <div class="typewrap">
       <select class="d-wf">${Object.keys(PATHS).map(w=>`<option>${w}</option>`).join("")}<option value="OTHER">OTHER — type the service name</option></select>
       <input class="d-wfother hidden" placeholder="Type the service name">
@@ -2043,6 +2053,7 @@ function addDevRow(pre){
 }
 $("#njAddDev").onclick=()=>addDevRow();
 
+function jnColor(jn){ let h=0; const t=String(jn||""); for(let i=0;i<t.length;i++){ h=(h*31+t.charCodeAt(i))>>>0; } return "hsl("+(h%360)+",62%,58%)"; }
 function serialToJN(n){ return "QJ-"+YEAR+"-JISD-"+String(n).padStart(4,"0"); }
 /* workshop TAG: two letters + three digits, unique per machine (AA-000 … ZZ-999) */
 function fmtTag(seq){ const li=Math.floor(seq/1000); const a=String.fromCharCode(65+Math.floor(li/26)%26), b=String.fromCharCode(65+(li%26)); return a+b+"-"+String(seq%1000).padStart(3,"0"); }
@@ -2172,8 +2183,12 @@ async function createJob(info, devices, extra){
 /* ---- jobs board ---- */
 function renderJobs(){
   const host=$("#jobsList"); if(!host) return;
-  const jobs=Object.values(JOBS).filter(j=>j.status==="active").sort((a,b)=>b.createdAt-a.createdAt);
-  if(!jobs.length){ host.innerHTML='<div class="panel"><p class="note">No active jobs. Open one from the New Job tab.</p></div>'; return; }
+  const jobs=Object.values(JOBS).filter(j=>j.status==="active").filter(j=>{
+    const ds=Object.values(DEVICES).filter(d=>d.jobId===j.id);
+    if(!ds.length) return true;
+    return ds.some(d=>{ const st=stationOf(d); return st!=="transportation" && st!=="archived" && st!=="departed"; });
+  }).sort((a,b)=>b.createdAt-a.createdAt);
+  if(!jobs.length){ host.innerHTML='<div class="panel"><p class="note">No active jobs on the floor. Jobs whose machines reached Transportation are on the Transportation page.</p></div>'; return; }
   host.innerHTML = jobs.map(j=>jobCard(j,false)).join("");
   bindJobCards(host);
 }
@@ -2185,16 +2200,22 @@ function renderArchive(){
 }
 
 function jobCard(j, archived){
-  const devs = Object.values(DEVICES).filter(d=>d.jobId===j.id);
-  return `<div class="job ${j.isWarrantyClaim?'warranty':''}" data-j="${j.id}">
+  const allDevs = Object.values(DEVICES).filter(d=>d.jobId===j.id);
+  const devs = archived ? allDevs : allDevs.filter(d=>{ const st=stationOf(d); return st!=="transportation" && st!=="archived" && st!=="departed"; });
+  const atTrans = archived ? 0 : allDevs.filter(d=>stationOf(d)==="transportation").length;
+  const atWarr = archived ? 0 : allDevs.filter(d=>stationOf(d)==="departed").length;
+  const jc=jnColor(j.jobNumber);
+  return `<div class="job ${j.isWarrantyClaim?'warranty':''}" data-j="${j.id}" style="border-left:4px solid ${jc}">
     <div class="job-hd">
-      <span class="jn">${esc(j.jobNumber)}</span>
+      <span class="jn" style="color:${jc}">${esc(j.jobNumber)}</span>
       <span class="cl">${esc(j.client)}</span>
       ${j.emails&&j.emails.length?`<span class="meta" title="${esc(j.emails.join(", "))}">✉ ${esc(j.emails[0])}${j.emails.length>1?" +"+(j.emails.length-1):""}</span>`:""}
       ${j.isWarrantyClaim?'<span class="pill wr">Warranty claim — no billing</span>':""}
       ${j.linkedJobNumber?`<span class="meta">↩ history: ${esc(j.linkedJobNumber)}</span>`:""}
       <span class="meta">${dstr(j.createdAt)}</span>
       <span class="pill ${j.has_po?'ok':'bad'}">${j.has_po?'PO '+esc(j.po_number):'PO missing'}</span>
+      ${atTrans?`<span class="pill" style="background:rgba(91,155,213,.15);color:var(--blue);border:1px solid rgba(91,155,213,.4)">🚚 ${atTrans} at Transportation</span>`:""}
+      ${atWarr?`<span class="pill" style="background:rgba(240,179,65,.15);color:var(--amber);border:1px solid rgba(240,179,65,.4)">⏳ ${atWarr} awaiting warranty</span>`:""}
       <div class="sp">
         ${archived?'<span class="archived-note">✓ Archived '+dstr(j.archivedAt)+'</span>'
           : `<button class="btn sm" data-act="po">${j.has_po?'Edit PO':'Add PO'}</button>`}
@@ -2229,7 +2250,9 @@ function deviceRow(j,d,archived){
     </div>
     <div class="bus">${bus}</div>
     <div class="st-label"><b>${st==="archived"?"✓ Archived":LBL[st]}</b><span>step ${Math.min(idx+1,path.length)} of ${path.length}</span></div>
-    <div class="dev-actions">${archived||st==="archived" ? `<button class="btn sm" data-act="report">Service report</button> ${chips}` : stationActions(d)+`<button class="btn sm ghost" data-act="editdev" title="Edit device / reopen any step">✎</button>`+chips}</div>
+    <div class="dev-actions">${archived||st==="archived"
+      ? `<button class="btn sm" data-act="report">Service report</button> ${(t.initial)?'<button class="btn sm" data-act="ireport">Initial report</button>':""} ${chips}`
+      : stationActions(d)+((t.initial)?'<button class="btn sm" data-act="ireport">Initial report</button>':"")+`<button class="btn sm ghost" data-act="editdev" title="Edit device / reopen any step">✎</button>`+chips}</div>
   </div>`;
 }
 
@@ -2243,7 +2266,7 @@ function stationActions(d){
     case "draft_offer": return `<button class="btn sm" data-act="offer">Build offer</button> ${d.offer?adv:'<span class="note warn">create offer or bypass to quotation</span>'}`;
     case "quotation": return `<button class="btn sm" data-act="quote">Finalize quotation</button> ${d.quotation?adv:'<span class="note warn">finalize contract price to advance</span>'}`;
     case "electrical_test_final": return `<button class="btn sm" data-act="test-final">Log final test</button> <span class="note ${(d.tests&&d.tests.final)?'':'warn'}">${(d.tests&&d.tests.final)?'validation received':'waiting for technician validation'}</span> ${(d.tests&&d.tests.final)?adv:""}`;
-    case "transportation": return `<button class="btn sm primary" data-act="gowarr">Open in Warranty page ▸</button> <button class="btn sm" data-act="report">Service report</button>`;
+    case "transportation": return `<button class="btn sm primary" data-act="gowarr">Open in Transportation page ▸</button> <button class="btn sm" data-act="report">Service report</button>`;
     default: return `<button class="btn sm primary" data-act="advance">Mark station complete ▸</button>`;
   }
 }
@@ -2265,10 +2288,12 @@ function bindJobCards(host){
       if(act==="test-initial") return testModal(d,"initial");
       if(act==="test-final") return testModal(d,"final");
       if(act==="warranty") return warrantyModal(j,d);
-      if(act==="gowarr"){ document.querySelector('.tabs button[data-t="warr"]').click(); return; }
+      if(act==="gowarr"){ document.querySelector('.tabs button[data-t="trans"]').click(); return; }
+      if(act==="byebye") return byeBye(d);
       if(act==="editjob") return editJobModal(j);
       if(act==="editdev") return editDevModal(d);
       if(act==="report") return printReport(j,d);
+      if(act==="ireport") return printInitialReport(j,d);
       if(act==="advance") return advance(d);
     };
   });
@@ -2421,7 +2446,7 @@ function findingsModal(d){
     if(!defects.length) return "Full "+d.workflow.toLowerCase()+" service. All inspected parts passed visual inspection. Standard "+d.workflow.toLowerCase()+" scope applies.";
     let out="Scope of work — "+d.workflow+":\n";
     defects.forEach(n=>{ out+="• Repair / replace "+n+(st[n].why?(" — "+st[n].why):"")+"\n"; });
-    const miss=[].concat(p.s,p.r).filter(n=>(pr[n]||"P")!=="P");
+    const miss=[].concat(p.s,p.r).filter(n=>(pr[n]||"P")==="M"); /* NOT EXIST parts are excluded — they never existed on this machine */
     if(miss.length) out+="• Supply missing components: "+miss.join(", ")+"\n";
     return out.trim();
   }
@@ -2498,8 +2523,8 @@ function offerModal(d, mode){
   function addRow(r){
     const el=document.createElement("div"); el.className="orow";
     el.innerHTML=`<input placeholder="Service / part / logistics item" class="o-d" value="${esc(r.desc)}">
-      <input placeholder="Qty" class="o-q mono" value="${esc(r.qty)}">
-      <input placeholder="Unit JOD" class="o-p mono" value="${esc(r.price)}">
+      <input placeholder="Qty" class="o-q mono" inputmode="decimal" value="${esc(r.qty)}">
+      <input placeholder="Unit JOD" class="o-p mono" inputmode="decimal" value="${esc(r.price)}">
       <button class="btn sm ghost">✕</button>`;
     el.querySelector("button").onclick=()=>{el.remove();calc();};
     el.querySelectorAll("input").forEach(i=>i.oninput=calc);
@@ -2542,13 +2567,18 @@ function offerModal(d, mode){
 
 /* ---- warranty lifecycle & archive ---- */
 function warrantyModal(j,d){
-  modal("Transportation · warranty — "+d.name, `
-    <p class="note">Choosing a warranty window starts the clock at dispatch. The device is then archived; when every device on ${esc(j.jobNumber)} is archived, the whole job moves to the archive.</p>
+  modal("Warranty decision — "+d.name, `
+    <p class="note">The machine has left the workshop. Choosing a warranty window starts the clock now and archives the device; when every device on ${esc(j.jobNumber||d.jobNumber)} is archived, the whole job moves to the archive.</p>
     <label>Warranty window</label>
-    <select id="wM"><option value="0">No warranty (skip)</option><option value="3">3 months</option><option value="6" selected>6 months</option><option value="12">12 months</option><option value="18">18 months</option><option value="24">24 months</option></select>
+    <select id="wM"><option value="0">No warranty (skip)</option><option value="3">3 months</option><option value="6" selected>6 months</option><option value="12">12 months</option><option value="18">18 months</option><option value="24">24 months</option><option value="custom">Manual — type the months…</option></select>
+    <input id="wCustom" class="mono hidden" inputmode="decimal" placeholder="Number of months (e.g. 9)" style="margin-top:6px;max-width:240px">
     <div class="switch"><input type="checkbox" id="wA" checked><span>Activate warranty authorization</span></div>`,
-    [{label:"Dispatch & archive device", cls:"primary", onClick:async()=>{
-      const m=parseInt($("#wM").value,10);
+    [{label:"Confirm & archive device", cls:"primary", onClick:async()=>{
+      let m;
+      if($("#wM").value==="custom"){
+        m=parseFloat($("#wCustom").value);
+        if(!m||m<=0) return toast("⛔ Type a valid number of months for the manual warranty");
+      } else m=parseInt($("#wM").value,10);
       const active=$("#wA").checked && m>0;
       const start=Date.now(), end=start+m*30.44*24*3600*1000;
       await updateDoc(doc(db,"devices",d.id),{
@@ -2564,21 +2594,49 @@ function warrantyModal(j,d){
       } else toast(d.name+" dispatched & archived");
       closeModal();
     }}]);
+  $("#wM").onchange=()=>$("#wCustom").classList.toggle("hidden", $("#wM").value!=="custom");
 }
 
 /* ---- edit job info any time ---- */
 function editJobModal(j){
   modal("Edit job — "+j.jobNumber, `
     <label>Client name</label><input id="ejClient" value="${esc(j.client)}">
-    <label>Client emails — comma separated</label><input id="ejEmails" value="${esc((j.emails||[]).join(", "))}">`,
+    <label>Client emails — comma separated</label><input id="ejEmails" value="${esc((j.emails||[]).join(", "))}">
+    <label>Job number — changing it requires your master PIN</label>
+    <input id="ejJN" class="mono" value="${esc(j.jobNumber)}">
+    <input id="ejPin" type="password" inputmode="numeric" maxlength="4" class="mono" placeholder="Master PIN (only if job number changed)" style="margin-top:6px;max-width:280px">`,
     [{label:"Save changes", cls:"primary", onClick:async()=>{
       const client=$("#ejClient").value.trim();
       if(!client) return toast("Client name is required");
       const emails=$("#ejEmails").value.split(/[\s,;]+/).map(x=>x.trim()).filter(x=>x.indexOf("@")>0);
-      await updateDoc(doc(db,"jobs",j.id),{client, emails});
+      const newJN=$("#ejJN").value.trim();
+      const upd={client, emails};
       const devs=Object.values(DEVICES).filter(d=>d.jobId===j.id);
-      for(const d of devs) await updateDoc(doc(db,"devices",d.id),{client});
-      closeModal(); toast("Job updated");
+      if(newJN && newJN!==j.jobNumber){
+        const masterPin=(USERS.find(u=>u.role==="master")||{}).pin;
+        if($("#ejPin").value!==masterPin) return toast("⛔ Wrong master PIN — job number not changed");
+        const dup=await getDocs(query(collection(db,"jobs"), where("jobNumber","==",newJN)));
+        let taken=false; dup.forEach(x=>{ if(x.id!==j.id) taken=true; });
+        if(taken) return toast("⛔ "+newJN+" is already used by another job");
+        upd.jobNumber=newJN;
+        const m=newJN.match(/^QJ-(\d{4})-JISD-(\d{1,4})$/);
+        if(m && parseInt(m[1],10)===YEAR){
+          const n=parseInt(m[2],10);
+          await runTransaction(db, async tx=>{
+            const cref=doc(db,"meta","counters");
+            const c=await tx.get(cref);
+            const cur=c.exists()?(c.data()[YEAR]||0):0;
+            if(n>cur) tx.set(cref,{[YEAR]:n},{merge:true});
+          });
+        }
+      }
+      await updateDoc(doc(db,"jobs",j.id), upd);
+      for(const d of devs){
+        const du={client};
+        if(upd.jobNumber) du.jobNumber=upd.jobNumber;
+        await updateDoc(doc(db,"devices",d.id), du);
+      }
+      closeModal(); toast(upd.jobNumber?"Job updated — number is now "+upd.jobNumber:"Job updated");
     }}]);
 }
 
@@ -2591,7 +2649,7 @@ function editDevModal(d){
       <div><label>Workshop TAG</label><input id="edTag" class="mono" maxlength="7" value="${esc(d.tag||"")}" placeholder="BB-000"></div>
       <div><label>Serial no.</label><input id="edSerial" class="mono" value="${esc(d.serial)}"></div>
     </div>
-    <div class="grid3"><div><label>kW</label><input id="edKw" class="mono" value="${esc(d.kw)}"></div></div>
+    <div class="grid3"><div><label>kW</label><input id="edKw" class="mono" inputmode="decimal" value="${esc(d.kw)}"></div></div>
     <label>Service / workflow</label>
     <select id="edWf">${Object.keys(PATHS).map(w=>`<option ${wfKnown&&d.workflow===w?"selected":""}>${w}</option>`).join("")}<option value="OTHER" ${wfKnown?"":"selected"}>OTHER — custom name</option></select>
     <input id="edWfOther" class="${wfKnown?"hidden":""}" style="margin-top:6px" placeholder="Custom service name" value="${wfKnown?"":esc(d.workflow)}">
@@ -2645,32 +2703,99 @@ function editDevModal(d){
   $("#edNp").onclick=()=>npModal(d);
 }
 
-/* ---- warranty & dispatch desk ---- */
-function renderWarranty(){
-  const host=$("#warrList"); if(!host) return;
+/* ---- transportation & dispatch desk ---- */
+function renderTransport(){
+  const host=$("#transList"); if(!host) return;
   const items=Object.values(DEVICES).filter(d=>{
     const j=JOBS[d.jobId];
     return j && j.status==="active" && stationOf(d)==="transportation";
   }).sort((a,b)=>a.createdAt-b.createdAt);
-  if(!items.length){ host.innerHTML='<div class="panel"><p class="note">No machines waiting at Transportation. When a device completes Painting, it appears here for warranty activation and dispatch.</p></div>'; return; }
+  if(!items.length){ host.innerHTML='<div class="panel"><p class="note">No machines waiting at Transportation. When a device completes its final station, it appears here for warranty activation and dispatch.</p></div>'; return; }
   host.innerHTML = items.map(d=>{
     const j=JOBS[d.jobId]||{};
-    return `<div class="job" data-j="${d.jobId}"><div class="dev" data-d="${d.id}">
+    const jc=jnColor(d.jobNumber);
+    return `<div class="job" data-j="${d.jobId}" style="border-left:4px solid ${jc}"><div class="dev" data-d="${d.id}">
       <div class="dev-top">
-        <span class="jn mono" style="color:var(--copper-hi)">${esc(d.jobNumber)}</span>
+        <span class="jn mono" style="color:${jc}">${esc(d.jobNumber)}</span>
         <b>${esc(d.name)}</b>
         ${d.tag?`<span class="mono" style="color:var(--copper-hi)">[${esc(d.tag)}]</span>`:""}
         <span class="wf">${esc(d.workflow)}</span>
         <span class="sn">${esc(d.type)} · S/N ${esc(d.serial)||"—"} · ${esc(j.client||d.client)}</span>
       </div>
       <div class="dev-actions">
-        <button class="btn sm primary" data-act="warranty">Set warranty &amp; dispatch</button>
+        <button class="btn sm primary" data-act="byebye">👋 Bye Bye — machine left the workshop</button>
         <button class="btn sm" data-act="report">Service report</button>
       </div>
     </div></div>`;
   }).join("");
   bindJobCards(host);
 }
+
+/* ---- Bye Bye: machine physically leaves; warranty decided on the Warranty page ---- */
+async function byeBye(d){
+  await updateDoc(doc(db,"devices",d.id),{
+    station:"departed", departedAt:Date.now(),
+    history:[...(d.history||[]),{station:"departed",at:Date.now(),by:me.name,note:"left workshop"}]
+  });
+  toast("👋 "+d.name+" left the workshop — set its warranty in the Warranty page");
+}
+
+/* ---- active warranty registry ---- */
+function renderWarranty(){
+  const host=$("#warrList"); if(!host) return;
+  const now=Date.now();
+  const pending=Object.values(DEVICES).filter(d=>d.station==="departed").sort((a,b)=>(a.departedAt||0)-(b.departedAt||0));
+  const items=Object.values(DEVICES).filter(d=>d.warranty&&d.warranty.active&&d.warranty.end)
+    .sort((a,b)=>a.warranty.end-b.warranty.end);
+  let html="";
+  if(pending.length){
+    html+='<div class="panel" style="border-color:var(--amber);border-width:1.5px"><h2 style="color:var(--amber)">⏳ Awaiting warranty decision — '+pending.length+' machine(s) left the workshop</h2>'+
+      pending.map(d=>{
+        const jc=jnColor(d.jobNumber);
+        return `<div class="dev" data-d="${d.id}" data-j="${d.jobId}" style="border-left:3px solid var(--amber);padding-left:12px;margin-bottom:8px">
+          <div class="dev-top">
+            <span class="jn mono" style="color:${jc}">${esc(d.jobNumber)}</span>
+            <b>${esc(d.name)}</b>
+            ${d.tag?`<span class="mono" style="color:var(--copper-hi)">[${esc(d.tag)}]</span>`:""}
+            <span class="sn">${esc(d.client)} · left ${dstr(d.departedAt)}</span>
+          </div>
+          <div class="dev-actions">
+            <button class="btn sm primary" data-act="warranty">Set warranty now</button>
+            <button class="btn sm" data-act="report">Service report</button>
+          </div>
+        </div>`;
+      }).join("")+'</div>';
+  }
+  if(!items.length && !pending.length){ host.innerHTML='<div class="panel"><p class="note">No machines awaiting a warranty decision and no active warranties yet.</p></div>'; return; }
+  if(items.length) html+='<div class="panel" style="padding-bottom:6px"><h2>Active warranties</h2></div>';
+  host.innerHTML = html + items.map(d=>{
+    const w=d.warranty;
+    const days=Math.ceil((w.end-now)/86400000);
+    const state = days<0 ? '<span class="pill bad">EXPIRED '+dstr(w.end)+'</span>'
+      : days<=30 ? '<span class="pill" style="background:rgba(240,179,65,.15);color:var(--amber);border:1px solid rgba(240,179,65,.4)">'+days+' days left</span>'
+      : '<span class="pill ok">'+days+' days left</span>';
+    const jc=jnColor(d.jobNumber);
+    return `<div class="job" style="border-left:4px solid ${jc}"><div class="dev">
+      <div class="dev-top">
+        <span class="jn mono" style="color:${jc}">${esc(d.jobNumber)}</span>
+        <b>${esc(d.name)}</b>
+        ${d.tag?`<span class="mono" style="color:var(--copper-hi)">[${esc(d.tag)}]</span>`:""}
+        <span class="sn">${esc(d.client)} · S/N ${esc(d.serial)||"—"}</span>
+        ${state}
+      </div>
+      <div class="note">${w.months} months warranty · ${dstr(w.start)} → <b style="color:var(--ink)">${dstr(w.end)}</b></div>
+    </div></div>`;
+  }).join("");
+  host.querySelectorAll('[data-act]').forEach(b=>{
+    b.onclick=()=>{
+      const devEl=b.closest('[data-d]'); if(!devEl) return;
+      const d=DEVICES[devEl.dataset.d]; const j=JOBS[devEl.dataset.j]||JOBS[d.jobId]||{};
+      if(b.dataset.act==="warranty") return warrantyModal(j,d);
+      if(b.dataset.act==="report") return printReport(j,d);
+    };
+  });
+}
+
 function delJobModal(j){
   const devs=Object.values(DEVICES).filter(d=>d.jobId===j.id);
   modal("Delete job — "+j.jobNumber, `
@@ -2779,9 +2904,9 @@ function printReport(j,d){
       <tr><td>IR</td><td>${cell(ir.ue)}</td><td>${cell(ir.ve)}</td><td>${cell(ir.we)}</td><td>${cell(ir.uv)}</td><td>${cell(ir.vw)}</td><td>${cell(ir.wu)}</td></tr>
     </table>
     <table style="margin-top:6px">
-      <tr><th colspan="4">${tt.rMode==="PH"?"Phase":"Phase-to-phase"} winding resistance (${rU})</th></tr>
-      <tr><td><b>${rL[0]}</b></td><td><b>${rL[1]}</b></td><td><b>${rL[2]}</b></td><td><b>Unbalance</b></td></tr>
-      <tr><td>${cell(r.uv)}</td><td>${cell(r.vw)}</td><td>${cell(r.wu)}</td><td>${cell(tt.balance)} %</td></tr>
+      <tr><th colspan="3">${tt.rMode==="PH"?"Phase":"Phase-to-phase"} winding resistance (${rU})</th></tr>
+      <tr><td><b>${rL[0]}</b></td><td><b>${rL[1]}</b></td><td><b>${rL[2]}</b></td></tr>
+      <tr><td>${cell(r.uv)}</td><td>${cell(r.vw)}</td><td>${cell(r.wu)}</td></tr>
     </table>
     ${showRun?`<table style="margin-top:6px">
       <tr><th colspan="7">Run readings</th></tr>
@@ -2818,8 +2943,10 @@ function printReport(j,d){
   const q=d.quotation;
   const html=`<html><head><title>${esc(j.jobNumber)} — Technical report</title><style>
     body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:36px;font-size:12.5px}
-    .band{border-bottom:4px solid #b06a33;padding-bottom:8px;margin-bottom:14px;display:flex;align-items:center;gap:14px}
-    .band .mk{border:2.5px solid #b06a33;color:#b06a33;font-weight:800;font-size:16px;border-radius:6px;padding:6px 10px;letter-spacing:.05em}
+    .wm{position:fixed;top:36%;left:0;right:0;text-align:center;font-size:170px;font-weight:800;color:#1b3a5c;opacity:.055;transform:rotate(-22deg);letter-spacing:.08em;pointer-events:none;z-index:0}
+    body>*{position:relative;z-index:1}
+    .band{border-bottom:4px solid #1b3a5c;padding-bottom:8px;margin-bottom:14px;display:flex;align-items:center;gap:14px}
+    .band .mk{border:2.5px solid #1b3a5c;color:#1b3a5c;font-weight:800;font-size:16px;border-radius:6px;padding:6px 10px;letter-spacing:.05em}
     .band h1{font-size:17px;margin:0;letter-spacing:.03em}
     .band h1 small{display:block;font-size:10px;color:#666;font-weight:normal;letter-spacing:.14em}
     h2{font-size:14px;margin:20px 0 6px;color:#7a4a20;border-bottom:1.5px solid #d9c4ab;padding-bottom:3px;text-transform:uppercase;letter-spacing:.05em}
@@ -2833,6 +2960,7 @@ function printReport(j,d){
     .sig div{width:30%;border-top:1px solid #333;padding-top:5px;text-align:center}
     @media print{body{margin:16mm}}
   </style></head><body>
+  <div class="wm">JISD</div>
   <div class="band"><span class="mk">JISD</span>
     <h1>FINAL TECHNICAL REPORT<small>JORDAN INVESTMENT &amp; SOUTHERN DEVELOPMENT CO. — ELECTRICAL MOTOR &amp; GENERATOR REPAIR WORKSHOP</small></h1></div>
 
@@ -2872,7 +3000,105 @@ function printReport(j,d){
   ${d.warranty&&d.warranty.active?` Warranty: <b>${d.warranty.months} months</b> — valid until <b>${dstr(d.warranty.end)}</b>.`:""}</p>
 
   <div class="sig">
-    <div>Tested by<br>${esc((t.final&&t.final.tested_by)||(t.initial&&t.initial.tested_by)||"")}</div>
+    <div>Approved by<br>Eng. Abdallah H. Dmour</div>
+    <div>Date<br>${dstr(Date.now())}</div>
+  </div>
+  <script>window.print()<\/script></body></html>`;
+  const w=window.open("about:blank","_blank"); w.document.write(html); w.document.close();
+}
+
+/* ---- compact INITIAL report (as-received): header, machine data, findings, initial test ---- */
+function printInitialReport(j,d){
+  const t=d.tests||{}, np=d.np||{}, tt=t.initial;
+  if(!tt) return toast("No initial test recorded yet");
+  const cell=(v)=>esc(v==null||v===""?"—":v);
+  const ir=tt.ir&&typeof tt.ir==="object"?tt.ir:{}, r=tt.r||{}, v=tt.v||{}, cu=tt.i||{}, vb=tt.vib||{};
+  const irU = tt.irUnit==="G"?"GΩ":"MΩ";
+  const rU = tt.rUnit==="MOHM"?"mΩ":"Ω";
+  const rL = tt.rMode==="PH" ? ["Phase U","Phase V","Phase W"] : ["U–V","V–W","W–U"];
+  const showRun = !tt.runOff && (tt.rpm || v.l12||v.l23||v.l13 || cu.l1||cu.l2||cu.l3);
+  const hasVib = !(d.vibOff&&d.vibOff.initial) && ["deh","dev","dea","ndeh","ndev","ndea"].some(k=>vb[k]);
+  const p=partsFor(d), pr=d.partsPresence||{}, st2=d.partStatus||{};
+  const allParts=[].concat(p.s,p.r);
+  const missM=allParts.filter(n=>pr[n]==="M");
+  const missN=allParts.filter(n=>pr[n]==="N");
+  let f1="";
+  if(allParts.length){
+    if(missM.length) f1+=`<h3>Missing parts</h3><p class="plist">▪ ${missM.map(esc).join(" &nbsp;▪ ")}</p>`;
+    if(missN.length) f1+=`<p class="plist dim">Non-existent on this machine (excluded from scope): ${missN.map(esc).join(" · ")}</p>`;
+    const present=allParts.filter(n=>(pr[n]||"P")==="P");
+    f1+=`<h3>Parts Status</h3><div class="pcols">${present.map(n=>{
+      const x=st2[n]||{};
+      return `<div>${esc(n)} — <b class="${x.s==="DEFECT"?"bad":""}">${x.s==="DEFECT"?("DEFECT"+(x.why?": "+esc(x.why):"")):(x.s||"—")}</b></div>`;
+    }).join("")}</div>`;
+  } else f1=`<h3>Inspection findings</h3><p class="plist">${esc(d.findings)||"—"}</p>`;
+  const html=`<html><head><title>${esc(j.jobNumber)} — Initial report</title><style>
+    body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:24px;font-size:11.5px}
+    .wm{position:fixed;top:36%;left:0;right:0;text-align:center;font-size:170px;font-weight:800;color:#1b3a5c;opacity:.055;transform:rotate(-22deg);letter-spacing:.08em;pointer-events:none;z-index:0}
+    body>*{position:relative;z-index:1}
+    .band{border-bottom:3px solid #1b3a5c;padding-bottom:6px;margin-bottom:10px;display:flex;align-items:center;gap:12px}
+    .band .mk{border:2.5px solid #1b3a5c;color:#1b3a5c;font-weight:800;font-size:15px;border-radius:6px;padding:5px 9px;letter-spacing:.05em}
+    .band h1{font-size:15px;margin:0}
+    .band h1 small{display:block;font-size:9px;color:#666;font-weight:normal;letter-spacing:.12em}
+    h2{font-size:12.5px;margin:12px 0 5px;color:#1b3a5c;border-bottom:1.2px solid #b9c6d4;padding-bottom:2px;text-transform:uppercase}
+    h3{margin:8px 0 3px;font-size:11.5px;color:#1b3a5c}
+    table{border-collapse:collapse;width:100%}
+    td,th{border:1px solid #999;padding:3.5px 7px;text-align:left}
+    th{background:#e8eef4}
+    .np td:first-child{width:22%;background:#f4f7fa;font-weight:bold}
+    .plist{font-size:11px;margin:2px 0}
+    .plist.dim{color:#666;font-size:10px}
+    .pcols{columns:2;column-gap:22px;font-size:10.5px}
+    .pcols div{break-inside:avoid;padding:1.5px 0;border-bottom:1px dotted #ccc}
+    .pcols .bad{color:#a02c26}
+    .sig{margin-top:28px;display:flex;justify-content:space-between;font-size:11px}
+    .sig div{width:38%;border-top:1px solid #333;padding-top:4px;text-align:center}
+    @media print{body{margin:11mm}}
+  </style></head><body>
+  <div class="wm">JISD</div>
+  <div class="band"><span class="mk">JISD</span>
+    <h1>INITIAL INSPECTION &amp; TEST REPORT — AS RECEIVED<small>JORDAN INVESTMENT &amp; SOUTHERN DEVELOPMENT CO. — ELECTRICAL MOTOR &amp; GENERATOR REPAIR WORKSHOP</small></h1></div>
+  <table class="hd">
+    <tr><td><b>JISD Ref #</b></td><td>${esc(j.jobNumber)}</td><td><b>Machine Type</b></td><td>${esc(d.deviceCode&&d.deviceCode!=="OTHER"?d.deviceCode:d.type)}</td></tr>
+    <tr><td><b>Attention / Client</b></td><td>${esc(j.client)}</td><td><b>Service Type</b></td><td>${esc(d.workflow)}</td></tr>
+    <tr><td><b>P.O. Number</b></td><td>${esc(j.po_number)||"Not published yet"}</td><td><b>Date</b></td><td>${dstr(Date.now())}</td></tr>
+  </table>
+  <h2>Machine data</h2>
+  <table class="np">
+    <tr><td>Type / Frame</td><td colspan="3">${cell(np.frame)}</td></tr>
+    <tr><td>Serial Number (S/N)</td><td>${cell(d.serial)}</td><td style="width:14%;background:#faf6f0"><b>TAG</b></td><td>${cell(d.tag)}</td></tr>
+    <tr><td>Power</td><td>${cell(d.kw?d.kw+" KW":"")}</td><td style="background:#faf6f0"><b>DE BRG</b></td><td>${cell(np.debrg)}</td></tr>
+    <tr><td>Voltage / CON</td><td>${cell(np.voltcon)}</td><td style="background:#faf6f0"><b>NDE BRG</b></td><td>${cell(np.ndebrg)}</td></tr>
+    <tr><td>Ampere</td><td>${cell(np.amp)}</td><td style="background:#faf6f0"><b>INS.Cl</b></td><td>${cell(np.inscl)}</td></tr>
+    <tr><td>Speed</td><td>${cell(np.speed)}</td><td style="background:#faf6f0"><b>Maker</b></td><td>${cell(np.maker)}</td></tr>
+  </table>
+  <h2>Reception findings</h2>
+  ${f1}
+  <h3>Proposed scope of work</h3><p style="white-space:pre-line">${esc(d.scope)||"—"}</p>
+  <h2>Initial electrical test — tested by ${esc(tt.tested_by)} · ${dstr(tt.at)}</h2>
+  <table>
+    <tr><th colspan="7">Insulation resistance — Megger (${irU})</th></tr>
+    <tr><td></td><td><b>U–E</b></td><td><b>V–E</b></td><td><b>W–E</b></td><td><b>U–V</b></td><td><b>V–W</b></td><td><b>W–U</b></td></tr>
+    <tr><td>IR</td><td>${cell(ir.ue)}</td><td>${cell(ir.ve)}</td><td>${cell(ir.we)}</td><td>${cell(ir.uv)}</td><td>${cell(ir.vw)}</td><td>${cell(ir.wu)}</td></tr>
+  </table>
+  <table style="margin-top:6px">
+    <tr><th colspan="3">${tt.rMode==="PH"?"Phase":"Phase-to-phase"} winding resistance (${rU})</th></tr>
+    <tr><td><b>${rL[0]}</b></td><td><b>${rL[1]}</b></td><td><b>${rL[2]}</b></td></tr>
+    <tr><td>${cell(r.uv)}</td><td>${cell(r.vw)}</td><td>${cell(r.wu)}</td></tr>
+  </table>
+  ${showRun?`<table style="margin-top:6px">
+    <tr><th colspan="7">Run readings</th></tr>
+    <tr><td></td><td><b>V L1–L2</b></td><td><b>V L2–L3</b></td><td><b>V L1–L3</b></td><td><b>I L1</b></td><td><b>I L2</b></td><td><b>I L3</b></td></tr>
+    <tr><td>${cell(tt.rpm)} RPM</td><td>${cell(v.l12)} V</td><td>${cell(v.l23)} V</td><td>${cell(v.l13)} V</td><td>${cell(cu.l1)} A</td><td>${cell(cu.l2)} A</td><td>${cell(cu.l3)} A</td></tr>
+  </table>`:""}
+  ${hasVib?`<table style="margin-top:6px">
+    <tr><th colspan="4">Vibration record (mm/s ${tt.vibUnit==="PEAK"?"Peak":"RMS"})</th></tr>
+    <tr><td></td><td><b>Horizontal</b></td><td><b>Vertical</b></td><td><b>Axial</b></td></tr>
+    <tr><td><b>DE</b></td><td>${cell(vb.deh)}</td><td>${cell(vb.dev)}</td><td>${cell(vb.dea)}</td></tr>
+    <tr><td><b>NDE</b></td><td>${cell(vb.ndeh)}</td><td>${cell(vb.ndev)}</td><td>${cell(vb.ndea)}</td></tr>
+  </table>`:""}
+  ${tt.notes?`<p style="margin-top:4px"><b>Notes:</b> ${esc(tt.notes)}</p>`:""}
+  <div class="sig">
     <div>Approved by<br>Eng. Abdallah H. Dmour</div>
     <div>Date<br>${dstr(Date.now())}</div>
   </div>
@@ -2918,7 +3144,7 @@ function renderTech(list){
   host.innerHTML = list.map(d=>{
     const phase = d.station==="electrical_test_initial"?"initial":"final";
     return `<div class="tech-card" data-d="${d.id}">
-      <span class="jn">${esc(d.jobNumber)} · ${esc(d.client)}</span>
+      <span class="jn" style="color:${jnColor(d.jobNumber)}">${esc(d.jobNumber)} · ${esc(d.client)}</span>
       <h3>${esc(d.name)} ${d.tag?'<span class="mono" style="font-size:15px;color:var(--copper-hi)">['+esc(d.tag)+']</span>':""}</h3>
       <div class="sn note mono">S/N ${esc(d.serial)||"—"} ${d.kw?("· "+esc(d.kw)+" kW"):""} · ${esc(d.workflow)}</div>
       <span class="stage">${phase==="initial"?"INITIAL TEST":"FINAL VALIDATION"}</span>
@@ -3084,7 +3310,7 @@ function startDash(){
   unsubs.push(u1,u2);
   function draw(){
     $("#kJobs").textContent = jobs.filter(j=>j.year===YEAR || (j.jobNumber||"").includes("-"+YEAR+"-")).length;
-    const active=devs.filter(d=>d.station!=="archived");
+    const active=devs.filter(d=>d.station!=="archived"&&d.station!=="departed");
     $("#kActive").textContent=active.length;
     const now=Date.now(), d90=now-90*24*3600*1000;
     const done=jobs.filter(j=>j.status==="archived" && j.archivedAt>=d90);
@@ -3100,7 +3326,7 @@ function startDash(){
       const items=active.filter(d=>dashStation(d)===st && (!jn[d.jobId] || jn[d.jobId].status==="active"));
       const n=DASH_ORDER.indexOf(st)+1;
       return `<div class="kcol"><div class="khd">${dlbl(st)}<span>${items.length}</span></div><div class="kbd">
-        ${items.map(d=>`<div class="kchip"><span class="jn">${esc(d.jobNumber)}${d.tag?" · "+esc(d.tag):""}</span><b>${esc(d.name)}</b><div class="note" style="font-size:11px">${esc(d.client)}</div></div>`).join("")||('<div class="kempty">'+(LANG==="ar"?AR_UI.clear:"station clear")+'</div>')}
+        ${items.map(d=>`<div class="kchip" style="border-left-color:${jnColor(d.jobNumber)}"><span class="jn" style="color:${jnColor(d.jobNumber)}">${esc(d.jobNumber)}${d.tag?" · "+esc(d.tag):""}</span><b>${esc(d.name)}</b><div class="note" style="font-size:11px">${esc(d.client)}</div></div>`).join("")||('<div class="kempty">'+(LANG==="ar"?AR_UI.clear:"station clear")+'</div>')}
         <div class="knum">${String(n).padStart(2,"0")}</div>
       </div></div>`;
     }).join("");
