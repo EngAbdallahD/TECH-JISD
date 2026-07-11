@@ -216,6 +216,14 @@ body.has-po .wrap{padding-bottom:64px}
 .devrow{display:grid;grid-template-columns:1fr 1.4fr .65fr .8fr .5fr 1.1fr 34px;gap:8px;margin-bottom:8px;align-items:center}
 @media(max-width:820px){.devrow{grid-template-columns:1fr 1fr}.offer-rows .orow{grid-template-columns:1fr 60px 90px 30px}}
 .archived-note{font-size:12px;color:var(--green)}
+.fold{width:28px;height:28px;border:1px solid var(--line2);border-radius:6px;background:var(--bg);color:var(--copper-hi);font-size:13px;flex:0 0 auto}
+.fold:hover{border-color:var(--copper)}
+.job.collapsed .devwrap{display:none}
+.jsum{display:none;flex-wrap:wrap;gap:6px;padding:10px 16px;align-items:center}
+.job.collapsed .jsum{display:flex}
+.jsum .sumchip{font-size:11px;font-family:"IBM Plex Mono";background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:3px 8px;color:var(--muted)}
+.jsum .sumchip b{color:var(--ink);font-family:"IBM Plex Sans"}
+.jsum .sumchip em{font-style:normal;color:var(--copper-hi)}
 .credit{position:fixed;left:0;right:0;bottom:0;z-index:30;text-align:center;font-family:"Saira Condensed";letter-spacing:.22em;font-size:11px;color:var(--faint);padding:6px 10px;background:linear-gradient(0deg,var(--bg) 60%,transparent);pointer-events:none;text-transform:uppercase}
 .credit b{color:var(--copper)}
 body.has-po .credit{bottom:44px}
@@ -245,7 +253,7 @@ body.has-po .credit{bottom:44px}
     <button class="theme-btn login-theme" title="Light / dark">☀</button>
     <div class="login-hd">
       <h1>JISD <em>Workshop OS</em></h1>
-      <p>Jordan Investment &amp; Southern Development Co. <span style="float:right;color:var(--copper)">v6.1</span></p>
+      <p>Jordan Investment &amp; Southern Development Co. <span style="float:right;color:var(--copper)">v6.9</span></p>
     </div>
     <div class="login-bd">
       <label id="opLabel">Select operator</label>
@@ -274,8 +282,11 @@ body.has-po .credit{bottom:44px}
       <button data-t="jobs" class="on">Active jobs</button>
       <button data-t="new">New job</button>
       <button data-t="scan">Re-entry scan</button>
+      <button data-t="appr">Approvals</button>
       <button data-t="trans">Transportation</button>
       <button data-t="warr">Warranty</button>
+      <button data-t="powait">PO waiting</button>
+      <button data-t="reports">Reports</button>
       <button data-t="arch">Archive</button>
     </div>
 
@@ -296,6 +307,13 @@ body.has-po .credit{bottom:44px}
               <button class="btn sm" id="njCheck">Check</button>
             </div>
             <div class="note" id="njSerialNote" style="margin-top:4px">Leave empty for automatic QJ-numbering.</div>
+          </div>
+          <div><label>Approval gate</label>
+            <select id="njApproval">
+              <option value="none">No approval needed</option>
+              <option value="start">Hold — approve BEFORE work starts</option>
+              <option value="quotation">Hold — approve AFTER quotation</option>
+            </select>
           </div>
         </div>
         <label style="margin-top:16px">Devices on this job</label>
@@ -320,6 +338,13 @@ body.has-po .credit{bottom:44px}
       </div>
     </div>
 
+    <div id="tab-appr" class="hidden">
+      <div class="panel">
+        <h2>Jobs waiting for approval</h2>
+        <p class="note">Jobs held at their gate — either before work starts or after the quotation. Approving releases the machines to continue through the pipeline.</p>
+      </div>
+      <div id="apprList"></div>
+    </div>
     <div id="tab-trans" class="hidden">
       <div class="panel">
         <h2>Transportation &amp; dispatch desk</h2>
@@ -333,6 +358,32 @@ body.has-po .credit{bottom:44px}
         <p class="note">All dispatched machines with a running warranty, sorted by nearest expiry. Use the Re-entry scan when one of them comes back.</p>
       </div>
       <div id="warrList"></div>
+    </div>
+    <div id="tab-powait" class="hidden">
+      <div class="panel">
+        <h2>Jobs waiting for PO</h2>
+        <p class="note">These jobs are fully finished — every machine dispatched and archived — but the client's Purchase Order has not arrived yet. Record the PO and the job moves to the archive automatically.</p>
+      </div>
+      <div id="powaitList"></div>
+    </div>
+    <div id="tab-reports" class="hidden">
+      <div class="panel">
+        <h2>Inventory report generator</h2>
+        <div class="grid3">
+          <div><label>Period</label>
+            <select id="rpPeriod"><option value="daily">Daily — today</option><option value="weekly">Weekly — last 7 days</option><option value="monthly" selected>Monthly — current month</option></select></div>
+        </div>
+        <label style="margin-top:12px">Include in the inventory</label>
+        <div class="dev-actions" style="gap:14px">
+          <label class="switch" style="margin:0"><input type="checkbox" id="rpOpen" checked><span>All open job numbers (everything not archived)</span></label>
+          <label class="switch" style="margin:0"><input type="checkbox" id="rpActive" checked><span>Active jobs</span></label>
+          <label class="switch" style="margin:0"><input type="checkbox" id="rpTrans" checked><span>Transportation</span></label>
+          <label class="switch" style="margin:0"><input type="checkbox" id="rpPO" checked><span>PO waiting</span></label>
+          <label class="switch" style="margin:0"><input type="checkbox" id="rpWarr" checked><span>Warranty</span></label>
+          <label class="switch" style="margin:0"><input type="checkbox" id="rpAppr" checked><span>Waiting for approval</span></label>
+        </div>
+        <div style="margin-top:16px"><button class="btn primary" id="rpGen">Generate printable inventory report</button></div>
+      </div>
     </div>
     <div id="tab-arch" class="hidden"><div id="archList"><p class="note">Loading archive…</p></div></div>
   </div>
@@ -1989,7 +2040,7 @@ document.querySelectorAll(".tabs button").forEach(b=>{
   b.onclick=()=>{
     document.querySelectorAll(".tabs button").forEach(x=>x.classList.remove("on"));
     b.classList.add("on");
-    ["jobs","new","scan","trans","warr","arch"].forEach(t=>$("#tab-"+t).classList.toggle("hidden", t!==b.dataset.t));
+    ["jobs","new","scan","appr","trans","warr","powait","reports","arch"].forEach(t=>$("#tab-"+t).classList.toggle("hidden", t!==b.dataset.t));
   };
 });
 
@@ -2011,16 +2062,17 @@ function autofillClientEmails(){
 }
 function startMaster(){
   $("#njYear").textContent = YEAR;
+  $("#rpGen").onclick=inventoryReport;
   $("#njClient").onchange=autofillClientEmails;
   $("#njClient").onblur=autofillClientEmails;
   if(!$("#njDevices").children.length) addDevRow();
   const uj = onSnapshot(collection(db,"jobs"), s=>{
     JOBS={}; s.forEach(d=>JOBS[d.id]={id:d.id,...d.data()});
-    renderJobs(); renderArchive(); renderPOBanner(); refreshClientMemory(); renderTransport(); renderWarranty();
+    renderJobs(); renderArchive(); renderPOBanner(); refreshClientMemory(); renderTransport(); renderWarranty(); renderPOWait(); renderApprovals();
   });
   const ud = onSnapshot(collection(db,"devices"), s=>{
     DEVICES={}; s.forEach(d=>DEVICES[d.id]={id:d.id,...d.data()});
-    renderJobs(); renderArchive(); renderTransport(); renderWarranty();
+    renderJobs(); renderArchive(); renderTransport(); renderWarranty(); renderPOWait(); renderApprovals();
   });
   unsubs.push(uj,ud);
 }
@@ -2053,6 +2105,9 @@ function addDevRow(pre){
 }
 $("#njAddDev").onclick=()=>addDevRow();
 
+const JISD_LOGO="data:image/png;base64,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";
+let EXPANDED = (function(){ try{ return JSON.parse(localStorage.getItem("jisd_expanded")||"{}"); }catch(e){ return {}; } })();
+function saveExpanded(){ try{ localStorage.setItem("jisd_expanded", JSON.stringify(EXPANDED)); }catch(e){} }
 function jnColor(jn){ let h=0; const t=String(jn||""); for(let i=0;i<t.length;i++){ h=(h*31+t.charCodeAt(i))>>>0; } return "hsl("+(h%360)+",62%,58%)"; }
 function serialToJN(n){ return "QJ-"+YEAR+"-JISD-"+String(n).padStart(4,"0"); }
 /* workshop TAG: two letters + three digits, unique per machine (AA-000 … ZZ-999) */
@@ -2129,10 +2184,12 @@ $("#njCreate").onclick = async ()=>{
     const emails=$("#njEmails").value.split(/[\s,;]+/).map(x=>x.trim()).filter(x=>x.indexOf("@")>0);
     const jobNumber = await createJob({
       client, emails,
-      po:$("#njPO").value.trim(), manualSerial
+      po:$("#njPO").value.trim(), manualSerial,
+      approval: $("#njApproval").value
     }, rows);
     toast("Job "+jobNumber+" created");
     $("#njClient").value=$("#njEmails").value=$("#njPO").value=$("#njSerial").value="";
+    $("#njApproval").value="none";
     $("#njSerialNote").style.color="var(--muted)"; $("#njSerialNote").textContent="Leave empty for automatic QJ-numbering.";
     $("#njDevices").innerHTML=""; addDevRow();
     document.querySelector('.tabs button[data-t="jobs"]').click();
@@ -2155,6 +2212,8 @@ async function createJob(info, devices, extra){
     jobNumber, client:info.client, emails:info.emails||[],
     has_po: !!info.po, po_number: info.po||"",
     status:"active", createdAt:Date.now(), year:YEAR,
+    approvalStage:(info.approval&&info.approval!=="none")?info.approval:"none",
+    approvalStatus:(info.approval&&info.approval!=="none")?"pending":"approved",
     isWarrantyClaim: !!(extra&&extra.warrantyClaim),
     linkedJobNumber: (extra&&extra.linked)||""
   });
@@ -2183,7 +2242,9 @@ async function createJob(info, devices, extra){
 /* ---- jobs board ---- */
 function renderJobs(){
   const host=$("#jobsList"); if(!host) return;
-  const jobs=Object.values(JOBS).filter(j=>j.status==="active").filter(j=>{
+  const jobs=Object.values(JOBS).filter(j=>j.status==="active")
+  .filter(j=>!(j.approvalStatus==="pending" && j.approvalStage==="start"))
+  .filter(j=>{
     const ds=Object.values(DEVICES).filter(d=>d.jobId===j.id);
     if(!ds.length) return true;
     return ds.some(d=>{ const st=stationOf(d); return st!=="transportation" && st!=="archived" && st!=="departed"; });
@@ -2205,8 +2266,12 @@ function jobCard(j, archived){
   const atTrans = archived ? 0 : allDevs.filter(d=>stationOf(d)==="transportation").length;
   const atWarr = archived ? 0 : allDevs.filter(d=>stationOf(d)==="departed").length;
   const jc=jnColor(j.jobNumber);
-  return `<div class="job ${j.isWarrantyClaim?'warranty':''}" data-j="${j.id}" style="border-left:4px solid ${jc}">
+  const open = !!EXPANDED[j.id];
+  const sum = devs.map(d=>`<span class="sumchip"><b>${esc(d.name)}</b>${d.tag?" ["+esc(d.tag)+"]":""} — <em>${LBL[stationOf(d)]}</em></span>`).join("")
+    || '<span class="sumchip">no devices on the floor</span>';
+  return `<div class="job ${j.isWarrantyClaim?'warranty':''} ${open?'':'collapsed'}" data-j="${j.id}" style="border-left:4px solid ${jc}">
     <div class="job-hd">
+      <button class="fold" data-act="fold" title="${open?'Collapse':'Expand'}">${open?"▾":"▸"}</button>
       <span class="jn" style="color:${jc}">${esc(j.jobNumber)}</span>
       <span class="cl">${esc(j.client)}</span>
       ${j.emails&&j.emails.length?`<span class="meta" title="${esc(j.emails.join(", "))}">✉ ${esc(j.emails[0])}${j.emails.length>1?" +"+(j.emails.length-1):""}</span>`:""}
@@ -2216,14 +2281,17 @@ function jobCard(j, archived){
       <span class="pill ${j.has_po?'ok':'bad'}">${j.has_po?'PO '+esc(j.po_number):'PO missing'}</span>
       ${atTrans?`<span class="pill" style="background:rgba(91,155,213,.15);color:var(--blue);border:1px solid rgba(91,155,213,.4)">🚚 ${atTrans} at Transportation</span>`:""}
       ${atWarr?`<span class="pill" style="background:rgba(240,179,65,.15);color:var(--amber);border:1px solid rgba(240,179,65,.4)">⏳ ${atWarr} awaiting warranty</span>`:""}
+      ${j.approvalStatus==="pending"?`<span class="pill" style="background:rgba(224,85,77,.12);color:var(--amber);border:1px solid rgba(240,179,65,.5)">✋ approval: ${j.approvalStage==="start"?"before start":"after quotation"}</span>`:""}
       <div class="sp">
         ${archived?'<span class="archived-note">✓ Archived '+dstr(j.archivedAt)+'</span>'
           : `<button class="btn sm" data-act="po">${j.has_po?'Edit PO':'Add PO'}</button>`}
+        <button class="btn sm" data-act="adddev" title="Add a device to this job">+ Device</button>
         <button class="btn sm" data-act="editjob" title="Edit job info">✎ Edit</button>
         <button class="btn sm danger" data-act="del" title="Delete job">🗑 Delete</button>
       </div>
     </div>
-    ${devs.map(d=>deviceRow(j,d,archived)).join("") || '<div class="dev"><span class="note">No devices on this job.</span></div>'}
+    <div class="jsum"><span class="note" style="font-size:11px">${devs.length} device(s):</span> ${sum}</div>
+    <div class="devwrap">${devs.map(d=>deviceRow(j,d,archived)).join("") || '<div class="dev"><span class="note">No devices on this job.</span></div>'}</div>
   </div>`;
 }
 
@@ -2272,13 +2340,23 @@ function stationActions(d){
 }
 
 function bindJobCards(host){
+  host.querySelectorAll(".job-hd").forEach(h=>{
+    h.onclick=(e)=>{
+      if(e.target.closest("button")||e.target.closest("[data-act]")) return;
+      const jid=h.closest(".job").dataset.j;
+      if(!jid) return;
+      EXPANDED[jid]=!EXPANDED[jid]; saveExpanded(); renderJobs(); renderArchive();
+    };
+  });
   host.querySelectorAll("[data-act]").forEach(b=>{
     b.onclick=()=>{
       const jid=b.closest(".job").dataset.j;
       var dEl=b.closest(".dev"); const did=dEl?dEl.dataset.d:null;
       const j=JOBS[jid], d=did?DEVICES[did]:null;
       const act=b.dataset.act;
+      if(act==="fold"){ EXPANDED[jid]=!EXPANDED[jid]; saveExpanded(); renderJobs(); renderArchive(); return; }
       if(act==="po") return poModal(j);
+      if(act==="poedit") return poModal(j, true);
       if(act==="del") return delJobModal(j);
       if(act==="missing") return missingModal(d);
       if(act==="nameplate") return npModal(d);
@@ -2290,7 +2368,9 @@ function bindJobCards(host){
       if(act==="warranty") return warrantyModal(j,d);
       if(act==="gowarr"){ document.querySelector('.tabs button[data-t="trans"]').click(); return; }
       if(act==="byebye") return byeBye(d);
+      if(act==="sendback") return sendBackModal(d);
       if(act==="editjob") return editJobModal(j);
+      if(act==="adddev") return addDeviceModal(j);
       if(act==="editdev") return editDevModal(d);
       if(act==="report") return printReport(j,d);
       if(act==="ireport") return printInitialReport(j,d);
@@ -2304,6 +2384,11 @@ async function advance(d){
   const path=pathOf(d);
   const st=stationOf(d);
   const i=path.indexOf(st);
+  const jGate=JOBS[d.jobId]||{};
+  if(jGate.approvalStatus==="pending"){
+    if(jGate.approvalStage==="start") return toast("⛔ "+jGate.jobNumber+" is on hold — approve it in the Approvals page before work starts.");
+    if(jGate.approvalStage==="quotation" && st==="quotation") return toast("⛔ Quotation approval required before execution — approve "+jGate.jobNumber+" in the Approvals page.");
+  }
   const guards={
     missing_parts: ()=> d.missingDone ? true : "Complete the missing parts checklist first.",
     inspection: ()=> (d.findings&&d.scope) ? true : "Complete the findings checklist (every present part needs PASS or DEFECT).",
@@ -2493,13 +2578,21 @@ function findingsModal(d){
   }
 }
 
-function poModal(j){
+function poModal(j, requirePin){
   modal("Purchase order — "+j.jobNumber, `
-    <label>PO number</label><input id="poN" class="mono" value="${esc(j.po_number)}" placeholder="Client PO reference">`,
-    [{label:"Clear PO", cls:"danger", onClick:async()=>{ await updateDoc(doc(db,"jobs",j.id),{has_po:false,po_number:""}); closeModal(); }},
+    <label>PO number</label><input id="poN" class="mono" value="${esc(j.po_number)}" placeholder="Client PO reference">
+    ${requirePin?`<label>Master PIN — required to modify an existing PO</label>
+    <input id="poPin" type="password" inputmode="numeric" maxlength="4" class="mono" placeholder="••••" style="max-width:140px;font-size:16px;letter-spacing:5px">`:""}`,
+    [{label:"Clear PO", cls:"danger", onClick:async()=>{
+       if(requirePin && $("#poPin").value!==(USERS.find(u=>u.role==="master")||{}).pin) return toast("⛔ Wrong master PIN");
+       await updateDoc(doc(db,"jobs",j.id),{has_po:false,po_number:""}); closeModal(); }},
      {label:"Save PO", cls:"primary", onClick:async()=>{
+       if(requirePin && $("#poPin").value!==(USERS.find(u=>u.role==="master")||{}).pin) return toast("⛔ Wrong master PIN");
        const v=$("#poN").value.trim(); if(!v) return toast("Enter the PO number");
-       await updateDoc(doc(db,"jobs",j.id),{has_po:true,po_number:v}); closeModal(); toast("PO recorded");
+       const upd={has_po:true,po_number:v};
+       if(j.status==="awaiting_po"){ upd.status="archived"; if(!j.archivedAt) upd.archivedAt=Date.now(); }
+       await updateDoc(doc(db,"jobs",j.id),upd); closeModal();
+       toast(j.status==="awaiting_po" ? "PO recorded — "+j.jobNumber+" moved to the archive" : "PO recorded");
      }}]);
 }
 /* ---- commercial logic engine ---- */
@@ -2555,6 +2648,11 @@ function offerModal(d, mode){
     if(kind==="offer") await updateDoc(doc(db,"devices",d.id),{offer:payload});
     else if(kind==="quotation") await updateDoc(doc(db,"devices",d.id),{quotation:payload});
     else { // bypass: duplicate payload into contract collection, skip estimation
+      const jj=JOBS[d.jobId]||{};
+      if(jj.approvalStatus==="pending" && jj.approvalStage==="quotation"){
+        await updateDoc(doc(db,"devices",d.id),{offer:{...payload,bypassed:true}, quotation:{...payload,bypassed:true}});
+        closeModal(); return toast("Quotation saved — ⛔ execution is held until "+jj.jobNumber+" is approved in the Approvals page");
+      }
       const after=path[path.indexOf("quotation")+1];
       await updateDoc(doc(db,"devices",d.id),{
         offer:{...payload,bypassed:true}, quotation:{...payload,bypassed:true},
@@ -2589,12 +2687,67 @@ function warrantyModal(j,d){
       // archive job if all devices done
       const rest=Object.values(DEVICES).filter(x=>x.jobId===j.id && x.id!==d.id);
       if(rest.every(x=>x.station==="archived")){
-        await updateDoc(doc(db,"jobs",j.id),{status:"archived",archivedAt:Date.now()});
-        toast(j.jobNumber+" fully archived");
+        if(j.has_po){
+          await updateDoc(doc(db,"jobs",j.id),{status:"archived",archivedAt:Date.now()});
+          toast(j.jobNumber+" fully archived");
+        } else {
+          await updateDoc(doc(db,"jobs",j.id),{status:"awaiting_po",archivedAt:Date.now()});
+          toast("⚠ "+j.jobNumber+" finished — parked in PO WAITING until the PO arrives");
+        }
       } else toast(d.name+" dispatched & archived");
       closeModal();
     }}]);
   $("#wM").onchange=()=>$("#wCustom").classList.toggle("hidden", $("#wM").value!=="custom");
+}
+
+/* ---- add a device to an existing job (master PIN required) ---- */
+function addDeviceModal(j){
+  modal("Add device — "+j.jobNumber, `
+    <div class="grid3">
+      <div><label>Device name / tag</label><input id="adName" placeholder="e.g. K-003"></div>
+      <div><label>Workshop TAG</label><input id="adTag" class="mono" maxlength="7" placeholder="auto (AA-000)"></div>
+      <div><label>Serial no.</label><input id="adSerial" class="mono"></div>
+    </div>
+    <div class="grid3">
+      <div><label>kW</label><input id="adKw" class="mono" inputmode="decimal"></div>
+      <div><label>Device type</label><select id="adType">${DEVICE_TYPES.map(t=>`<option value="${t.code}">${t.name}</option>`).join("")}</select></div>
+      <div><label>Service</label><select id="adWf">${Object.keys(PATHS).map(w=>`<option>${w}</option>`).join("")}<option value="OTHER">OTHER — type name</option></select></div>
+    </div>
+    <input id="adTypeOther" class="hidden" style="margin-top:6px" placeholder="Type the device name by hand">
+    <input id="adWfOther" class="hidden" style="margin-top:6px" placeholder="Type the service name">
+    <label>Master PIN — required to add a device to a running job</label>
+    <input id="adPin" type="password" inputmode="numeric" maxlength="4" class="mono" placeholder="••••" style="max-width:140px;font-size:16px;letter-spacing:5px">`,
+    [{label:"Add device", cls:"primary", onClick:async()=>{
+      const masterPin=(USERS.find(u=>u.role==="master")||{}).pin;
+      if($("#adPin").value!==masterPin) return toast("⛔ Wrong master PIN");
+      const name=$("#adName").value.trim();
+      if(!name) return toast("Device name is required");
+      let tag=null;
+      const tRaw=$("#adTag").value.trim();
+      if(tRaw){
+        tag=normTag(tRaw);
+        if(!tag) return toast("⛔ TAG must be two letters + three numbers (e.g. BB-000)");
+        if(await tagTaken(tag)) return toast("⛔ TAG "+tag+" is already assigned");
+      } else tag=await nextTag();
+      const code=$("#adType").value;
+      const dt=DEVICE_TYPES.find(t=>t.code===code);
+      const wsel=$("#adWf").value;
+      const wname=$("#adWfOther").value.trim();
+      const workflow = wsel==="OTHER" ? (wname||"CUSTOM SERVICE") : wsel;
+      await addDoc(collection(db,"devices"),{
+        tag, jobId:j.id, jobNumber:j.jobNumber, client:j.client,
+        name, type: code==="OTHER" ? ($("#adTypeOther").value.trim()||"Other") : dt.name,
+        deviceCode:code, basePath: wsel==="OTHER" ? "REWINDING & OVERHAUL" : wsel,
+        serial:$("#adSerial").value.trim(), kw:$("#adKw").value.trim(),
+        workflow, station:"missing_parts", createdAt:Date.now(),
+        partsPresence:{}, missingDone:false, customParts:[], partStatus:{},
+        findings:"", scope:"", tests:{}, offer:null, quotation:null, soloRun:null, warranty:null,
+        history:[{station:"missing_parts", at:Date.now(), by:me.name, note:"added to running job"}]
+      });
+      closeModal(); toast("✓ "+name+" ["+tag+"] added to "+j.jobNumber);
+    }}]);
+  $("#adType").onchange=()=>$("#adTypeOther").classList.toggle("hidden", $("#adType").value!=="OTHER");
+  $("#adWf").onchange=()=>$("#adWfOther").classList.toggle("hidden", $("#adWf").value!=="OTHER");
 }
 
 /* ---- edit job info any time ---- */
@@ -2724,11 +2877,37 @@ function renderTransport(){
       </div>
       <div class="dev-actions">
         <button class="btn sm primary" data-act="byebye">👋 Bye Bye — machine left the workshop</button>
+        <button class="btn sm" data-act="sendback">◂ Send back</button>
         <button class="btn sm" data-act="report">Service report</button>
+        ${j.has_po?'<button class="btn sm" data-act="poedit">Edit PO · '+esc(j.po_number)+'</button>':'<button class="btn sm danger" data-act="po">Add PO</button>'}
       </div>
     </div></div>`;
   }).join("");
   bindJobCards(host);
+}
+
+/* ---- send a machine back from Transportation to an earlier station ---- */
+function sendBackModal(d){
+  const p=pathOf(d);
+  const opts=["painting","assembly"].filter(st=>p.indexOf(st)>-1);
+  if(!opts.length) return toast("This workflow has no Painting or Assembly station to return to");
+  modal("Send back — "+d.name, `
+    <p class="note">The machine returns to the chosen station and reappears on the Active Jobs board. The move is recorded in its history.</p>
+    <div class="dev-actions" style="margin-top:12px">
+      ${opts.map(st=>`<button class="btn primary" data-back="${st}">◂ Back to ${LBL[st]}</button>`).join(" ")}
+    </div>`,
+    [{label:"Cancel", onClick:closeModal}]);
+  $("#mdBody").querySelectorAll("[data-back]").forEach(b=>{
+    b.onclick=async ()=>{
+      const st=b.dataset.back;
+      await updateDoc(doc(db,"devices",d.id),{
+        station:st,
+        history:[...(d.history||[]),{station:st,at:Date.now(),by:me.name,note:"sent back from transportation"}]
+      });
+      closeModal();
+      toast("◂ "+d.name+" returned to "+LBL[st]);
+    };
+  });
 }
 
 /* ---- Bye Bye: machine physically leaves; warranty decided on the Warranty page ---- */
@@ -2762,6 +2941,7 @@ function renderWarranty(){
           <div class="dev-actions">
             <button class="btn sm primary" data-act="warranty">Set warranty now</button>
             <button class="btn sm" data-act="report">Service report</button>
+            ${JOBS[d.jobId]?(JOBS[d.jobId].has_po?'<button class="btn sm" data-act="poedit">Edit PO · '+esc(JOBS[d.jobId].po_number)+'</button>':'<button class="btn sm danger" data-act="po">Add PO</button>'):""}
           </div>
         </div>`;
       }).join("")+'</div>';
@@ -2783,7 +2963,9 @@ function renderWarranty(){
         <span class="sn">${esc(d.client)} · S/N ${esc(d.serial)||"—"}</span>
         ${state}
       </div>
-      <div class="note">${w.months} months warranty · ${dstr(w.start)} → <b style="color:var(--ink)">${dstr(w.end)}</b></div>
+      <div class="note">${w.months} months warranty · ${dstr(w.start)} → <b style="color:var(--ink)">${dstr(w.end)}</b>
+        ${JOBS[d.jobId]?(JOBS[d.jobId].has_po?' &nbsp;<button class="btn sm" data-act="poedit" data-jid="'+d.jobId+'">Edit PO · '+esc(JOBS[d.jobId].po_number)+'</button>':' &nbsp;<button class="btn sm danger" data-act="po" data-jid="'+d.jobId+'">Add PO</button>'):""}
+      </div>
     </div></div>`;
   }).join("");
   host.querySelectorAll('[data-act]').forEach(b=>{
@@ -2792,6 +2974,167 @@ function renderWarranty(){
       const d=DEVICES[devEl.dataset.d]; const j=JOBS[devEl.dataset.j]||JOBS[d.jobId]||{};
       if(b.dataset.act==="warranty") return warrantyModal(j,d);
       if(b.dataset.act==="report") return printReport(j,d);
+      if(b.dataset.act==="po") return poModal(JOBS[b.dataset.jid]||j);
+      if(b.dataset.act==="poedit") return poModal(JOBS[b.dataset.jid]||j, true);
+    };
+  });
+}
+
+/* ---- jobs waiting for approval ---- */
+function renderApprovals(){
+  const host=$("#apprList"); if(!host) return;
+  const jobs=Object.values(JOBS).filter(j=>j.approvalStatus==="pending").sort((a,b)=>b.createdAt-a.createdAt);
+  if(!jobs.length){ host.innerHTML='<div class="panel"><p class="note">Nothing to approve. Jobs created with an approval gate will wait here.</p></div>'; return; }
+  host.innerHTML = jobs.map(j=>{
+    const jc=jnColor(j.jobNumber);
+    const devs=Object.values(DEVICES).filter(d=>d.jobId===j.id);
+    return `<div class="job" data-j="${j.id}" style="border-left:4px solid ${jc}">
+      <div class="job-hd">
+        <span class="jn" style="color:${jc}">${esc(j.jobNumber)}</span>
+        <span class="cl">${esc(j.client)}</span>
+        <span class="meta">${dstr(j.createdAt)}</span>
+        <span class="pill" style="background:rgba(240,179,65,.15);color:var(--amber);border:1px solid rgba(240,179,65,.4)">✋ ${j.approvalStage==="start"?"hold before work starts":"hold after quotation"}</span>
+        <span class="pill ${j.has_po?'ok':'bad'}">${j.has_po?'PO '+esc(j.po_number):'PO missing'}</span>
+        <div class="sp">
+          <button class="btn sm primary" data-act="approve">✓ Approve job</button>
+          <button class="btn sm" data-act="unhold">Remove requirement</button>
+        </div>
+      </div>
+      <div class="jsum" style="display:flex">${devs.map(d=>`<span class="sumchip"><b>${esc(d.name)}</b>${d.tag?" ["+esc(d.tag)+"]":""} — <em>${LBL[stationOf(d)]}</em></span>`).join("")||'<span class="sumchip">no devices</span>'}</div>
+    </div>`;
+  }).join("");
+  host.querySelectorAll("[data-act]").forEach(b=>{
+    b.onclick=async ()=>{
+      const j=JOBS[b.closest(".job").dataset.j];
+      if(b.dataset.act==="approve"){
+        await updateDoc(doc(db,"jobs",j.id),{approvalStatus:"approved",approvedAt:Date.now(),approvedBy:me.name});
+        toast("✓ "+j.jobNumber+" approved — the pipeline is released");
+      } else if(b.dataset.act==="unhold"){
+        await updateDoc(doc(db,"jobs",j.id),{approvalStage:"none",approvalStatus:"approved"});
+        toast("Approval requirement removed from "+j.jobNumber);
+      }
+    };
+  });
+}
+
+/* ---- inventory report generator ---- */
+function inventoryReport(){
+  const period=$("#rpPeriod").value;
+  const now=new Date();
+  let start, title;
+  if(period==="daily"){ start=new Date(now.getFullYear(),now.getMonth(),now.getDate()).getTime(); title="DAILY INVENTORY REPORT — "+dstr(Date.now()); }
+  else if(period==="weekly"){ start=Date.now()-6*86400000; title="WEEKLY INVENTORY REPORT — "+dstr(start)+" → "+dstr(Date.now()); }
+  else { start=new Date(now.getFullYear(),now.getMonth(),1).getTime(); title="MONTHLY INVENTORY REPORT — "+now.toLocaleString("en",{month:"long",year:"numeric"}); }
+  const jobsAll=Object.values(JOBS), devsAll=Object.values(DEVICES);
+  const opened=jobsAll.filter(j=>j.createdAt>=start).length;
+  const closed=jobsAll.filter(j=>(j.status==="archived"||j.status==="awaiting_po")&&j.archivedAt>=start).length;
+  const th=r=>"<tr>"+r.map(x=>"<th>"+x+"</th>").join("")+"</tr>";
+  const td=r=>"<tr>"+r.map(x=>"<td>"+x+"</td>").join("")+"</tr>";
+  let sec="";
+  if($("#rpOpen").checked){
+    const open=jobsAll.filter(j=>j.status!=="archived").sort((a,b)=>a.createdAt-b.createdAt);
+    const stName=j=> j.status==="awaiting_po" ? "PO WAITING"
+      : (j.approvalStatus==="pending" ? (j.approvalStage==="start"?"HOLD — before start":"HOLD — after quotation") : "ACTIVE");
+    sec+=`<h2>All open job numbers (not archived) — ${open.length}</h2>`;
+    sec+= open.length? "<table>"+th(["Job No","Client","Status","PO","Machines & station","Opened"])+
+      open.map(j=>{
+        const ds=devsAll.filter(d=>d.jobId===j.id);
+        return td([esc(j.jobNumber), esc(j.client), stName(j), j.has_po?esc(j.po_number):"—",
+          ds.map(d=>esc(d.name)+(d.tag?" ["+esc(d.tag)+"]":"")+" — "+LBL[stationOf(d)]).join("<br>")||"—", dstr(j.createdAt)]);
+      }).join("")+"</table>" : "<p>None.</p>";
+  }
+  if($("#rpActive").checked){
+    const jobs=jobsAll.filter(j=>j.status==="active").sort((a,b)=>a.createdAt-b.createdAt);
+    sec+=`<h2>Active jobs — ${jobs.length}</h2>`;
+    sec+= jobs.length? "<table>"+th(["Job No","Client","PO","Machines & current station","Opened"])+
+      jobs.map(j=>{
+        const ds=devsAll.filter(d=>d.jobId===j.id);
+        return td([esc(j.jobNumber), esc(j.client), j.has_po?esc(j.po_number):"—",
+          ds.map(d=>esc(d.name)+(d.tag?" ["+esc(d.tag)+"]":"")+" — "+LBL[stationOf(d)]).join("<br>")||"—", dstr(j.createdAt)]);
+      }).join("")+"</table>" : "<p>None.</p>";
+  }
+  if($("#rpTrans").checked){
+    const items=devsAll.filter(d=>{const j=JOBS[d.jobId];return j&&j.status==="active"&&stationOf(d)==="transportation";});
+    sec+=`<h2>Transportation — ${items.length}</h2>`;
+    sec+= items.length? "<table>"+th(["Job No","Machine","TAG","Client","Service"])+
+      items.map(d=>td([esc(d.jobNumber),esc(d.name),esc(d.tag)||"—",esc(d.client),esc(d.workflow)])).join("")+"</table>" : "<p>None.</p>";
+  }
+  if($("#rpPO").checked){
+    const jobs=jobsAll.filter(j=>j.status==="awaiting_po");
+    sec+=`<h2>PO waiting — ${jobs.length}</h2>`;
+    sec+= jobs.length? "<table>"+th(["Job No","Client","Finished","Machines"])+
+      jobs.map(j=>td([esc(j.jobNumber),esc(j.client),dstr(j.archivedAt),devsAll.filter(d=>d.jobId===j.id).map(d=>esc(d.name)).join(", ")||"—"])).join("")+"</table>" : "<p>None.</p>";
+  }
+  if($("#rpWarr").checked){
+    const pend=devsAll.filter(d=>d.station==="departed");
+    const act=devsAll.filter(d=>d.warranty&&d.warranty.active&&d.warranty.end).sort((a,b)=>a.warranty.end-b.warranty.end);
+    sec+=`<h2>Warranty — ${pend.length} awaiting decision · ${act.length} active</h2>`;
+    if(pend.length) sec+="<h3>Awaiting warranty decision</h3><table>"+th(["Job No","Machine","TAG","Client","Left workshop"])+
+      pend.map(d=>td([esc(d.jobNumber),esc(d.name),esc(d.tag)||"—",esc(d.client),dstr(d.departedAt)])).join("")+"</table>";
+    if(act.length) sec+="<h3>Active warranties</h3><table>"+th(["Job No","Machine","TAG","Client","Months","Valid until","Days left"])+
+      act.map(d=>{const days=Math.ceil((d.warranty.end-Date.now())/86400000);
+        return td([esc(d.jobNumber),esc(d.name),esc(d.tag)||"—",esc(d.client),d.warranty.months,dstr(d.warranty.end),days<0?"EXPIRED":days]);}).join("")+"</table>";
+    if(!pend.length&&!act.length) sec+="<p>None.</p>";
+  }
+  if($("#rpAppr").checked){
+    const jobs=jobsAll.filter(j=>j.approvalStatus==="pending");
+    sec+=`<h2>Waiting for approval — ${jobs.length}</h2>`;
+    sec+= jobs.length? "<table>"+th(["Job No","Client","Gate","Requested","Machines"])+
+      jobs.map(j=>td([esc(j.jobNumber),esc(j.client),j.approvalStage==="start"?"Before start":"After quotation",dstr(j.createdAt),devsAll.filter(d=>d.jobId===j.id).map(d=>esc(d.name)).join(", ")||"—"])).join("")+"</table>" : "<p>None.</p>";
+  }
+  const html=`<html><head><title>${title}</title><style>
+    body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:30px;font-size:11.5px}
+    .wm{position:fixed;top:30%;left:0;right:0;text-align:center;opacity:.06;transform:rotate(-18deg);pointer-events:none;z-index:0}
+    .wm img{width:430px}
+    body>*{position:relative;z-index:1}
+    .band{border-bottom:3px solid #1b3a5c;padding-bottom:6px;margin-bottom:8px;display:flex;align-items:center;gap:12px}
+    .mklogo{height:54px}
+    .band h1{font-size:15px;margin:0}
+    .band h1 small{display:block;font-size:9px;color:#666;font-weight:normal;letter-spacing:.12em}
+    h2{font-size:12.5px;margin:14px 0 5px;color:#1b3a5c;border-bottom:1.2px solid #b9c6d4;padding-bottom:2px;text-transform:uppercase}
+    h3{font-size:11.5px;margin:8px 0 3px;color:#1b3a5c}
+    table{border-collapse:collapse;width:100%;margin-bottom:4px}
+    td,th{border:1px solid #999;padding:3.5px 7px;text-align:left;vertical-align:top}
+    th{background:#e8eef4}
+    .stats{font-size:11px;color:#333;margin-bottom:4px}
+    @media print{body{margin:11mm}}
+  </style></head><body>
+  <div class="wm"><img src="${JISD_LOGO}" alt=""></div>
+  <div class="band"><img class="mklogo" src="${JISD_LOGO}" alt="JISD">
+    <h1>${title}<small>JORDAN INVESTMENT &amp; SOUTHERN DEVELOPMENT CO.</small></h1></div>
+  <p class="stats">Generated ${new Date().toLocaleString("en-GB")} by ${esc(me.name)} · Jobs opened in period: <b>${opened}</b> · Jobs completed in period: <b>${closed}</b></p>
+  ${sec}
+  <script>window.print()<\/script></body></html>`;
+  const w=window.open("about:blank","_blank"); w.document.write(html); w.document.close();
+}
+
+/* ---- jobs waiting for PO ---- */
+function renderPOWait(){
+  const host=$("#powaitList"); if(!host) return;
+  const jobs=Object.values(JOBS).filter(j=>j.status==="awaiting_po").sort((a,b)=>(b.archivedAt||0)-(a.archivedAt||0));
+  if(!jobs.length){ host.innerHTML='<div class="panel"><p class="note">Nothing waiting. Finished jobs without a PO will appear here.</p></div>'; return; }
+  host.innerHTML = jobs.map(j=>{
+    const jc=jnColor(j.jobNumber);
+    const devs=Object.values(DEVICES).filter(d=>d.jobId===j.id);
+    return `<div class="job" data-j="${j.id}" style="border-left:4px solid ${jc}">
+      <div class="job-hd">
+        <span class="jn" style="color:${jc}">${esc(j.jobNumber)}</span>
+        <span class="cl">${esc(j.client)}</span>
+        <span class="meta">finished ${dstr(j.archivedAt)}</span>
+        <span class="pill bad">PO missing</span>
+        <div class="sp">
+          <button class="btn sm primary" data-act="po">Add PO now</button>
+          <button class="btn sm danger" data-act="del">🗑 Delete</button>
+        </div>
+      </div>
+      <div class="jsum" style="display:flex">${devs.map(d=>`<span class="sumchip"><b>${esc(d.name)}</b>${d.tag?" ["+esc(d.tag)+"]":""} — <em>Archived</em></span>`).join("")||'<span class="sumchip">no devices</span>'}</div>
+    </div>`;
+  }).join("");
+  host.querySelectorAll("[data-act]").forEach(b=>{
+    b.onclick=()=>{
+      const j=JOBS[b.closest(".job").dataset.j];
+      if(b.dataset.act==="po") return poModal(j);
+      if(b.dataset.act==="del") return delJobModal(j);
     };
   });
 }
@@ -2825,7 +3168,7 @@ function delJobModal(j){
 
 /* ---- PO collection alert feed ---- */
 function renderPOBanner(){
-  const missing=Object.values(JOBS).filter(j=>j.status==="active" && !j.has_po);
+  const missing=Object.values(JOBS).filter(j=>(j.status==="active"||j.status==="awaiting_po") && !j.has_po);
   const on=missing.length>0 && me&&me.role==="master";
   $("#poBanner").classList.toggle("on",on);
   document.body.classList.toggle("has-po",on);
@@ -2943,10 +3286,11 @@ function printReport(j,d){
   const q=d.quotation;
   const html=`<html><head><title>${esc(j.jobNumber)} — Technical report</title><style>
     body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:36px;font-size:12.5px}
-    .wm{position:fixed;top:36%;left:0;right:0;text-align:center;font-size:170px;font-weight:800;color:#1b3a5c;opacity:.055;transform:rotate(-22deg);letter-spacing:.08em;pointer-events:none;z-index:0}
+    .wm{position:fixed;top:30%;left:0;right:0;text-align:center;opacity:.06;transform:rotate(-18deg);pointer-events:none;z-index:0}
+    .wm img{width:430px}
     body>*{position:relative;z-index:1}
     .band{border-bottom:4px solid #1b3a5c;padding-bottom:8px;margin-bottom:14px;display:flex;align-items:center;gap:14px}
-    .band .mk{border:2.5px solid #1b3a5c;color:#1b3a5c;font-weight:800;font-size:16px;border-radius:6px;padding:6px 10px;letter-spacing:.05em}
+    .mklogo{height:62px}
     .band h1{font-size:17px;margin:0;letter-spacing:.03em}
     .band h1 small{display:block;font-size:10px;color:#666;font-weight:normal;letter-spacing:.14em}
     h2{font-size:14px;margin:20px 0 6px;color:#7a4a20;border-bottom:1.5px solid #d9c4ab;padding-bottom:3px;text-transform:uppercase;letter-spacing:.05em}
@@ -2960,9 +3304,9 @@ function printReport(j,d){
     .sig div{width:30%;border-top:1px solid #333;padding-top:5px;text-align:center}
     @media print{body{margin:16mm}}
   </style></head><body>
-  <div class="wm">JISD</div>
-  <div class="band"><span class="mk">JISD</span>
-    <h1>FINAL TECHNICAL REPORT<small>JORDAN INVESTMENT &amp; SOUTHERN DEVELOPMENT CO. — ELECTRICAL MOTOR &amp; GENERATOR REPAIR WORKSHOP</small></h1></div>
+  <div class="wm"><img src="${JISD_LOGO}" alt=""></div>
+  <div class="band"><img class="mklogo" src="${JISD_LOGO}" alt="JISD">
+    <h1>FINAL TECHNICAL REPORT<small>JORDAN INVESTMENT &amp; SOUTHERN DEVELOPMENT CO.</small></h1></div>
 
   <table class="hd">
     <tr><td><b>JISD Ref #</b></td><td>${esc(j.jobNumber)}</td><td><b>Machine Type</b></td><td>${esc(d.deviceCode&&d.deviceCode!=="OTHER"?d.deviceCode:d.type)}</td></tr>
@@ -3034,10 +3378,11 @@ function printInitialReport(j,d){
   } else f1=`<h3>Inspection findings</h3><p class="plist">${esc(d.findings)||"—"}</p>`;
   const html=`<html><head><title>${esc(j.jobNumber)} — Initial report</title><style>
     body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:24px;font-size:11.5px}
-    .wm{position:fixed;top:36%;left:0;right:0;text-align:center;font-size:170px;font-weight:800;color:#1b3a5c;opacity:.055;transform:rotate(-22deg);letter-spacing:.08em;pointer-events:none;z-index:0}
+    .wm{position:fixed;top:30%;left:0;right:0;text-align:center;opacity:.06;transform:rotate(-18deg);pointer-events:none;z-index:0}
+    .wm img{width:430px}
     body>*{position:relative;z-index:1}
     .band{border-bottom:3px solid #1b3a5c;padding-bottom:6px;margin-bottom:10px;display:flex;align-items:center;gap:12px}
-    .band .mk{border:2.5px solid #1b3a5c;color:#1b3a5c;font-weight:800;font-size:15px;border-radius:6px;padding:5px 9px;letter-spacing:.05em}
+    .mklogo{height:56px}
     .band h1{font-size:15px;margin:0}
     .band h1 small{display:block;font-size:9px;color:#666;font-weight:normal;letter-spacing:.12em}
     h2{font-size:12.5px;margin:12px 0 5px;color:#1b3a5c;border-bottom:1.2px solid #b9c6d4;padding-bottom:2px;text-transform:uppercase}
@@ -3055,9 +3400,9 @@ function printInitialReport(j,d){
     .sig div{width:38%;border-top:1px solid #333;padding-top:4px;text-align:center}
     @media print{body{margin:11mm}}
   </style></head><body>
-  <div class="wm">JISD</div>
-  <div class="band"><span class="mk">JISD</span>
-    <h1>INITIAL INSPECTION &amp; TEST REPORT — AS RECEIVED<small>JORDAN INVESTMENT &amp; SOUTHERN DEVELOPMENT CO. — ELECTRICAL MOTOR &amp; GENERATOR REPAIR WORKSHOP</small></h1></div>
+  <div class="wm"><img src="${JISD_LOGO}" alt=""></div>
+  <div class="band"><img class="mklogo" src="${JISD_LOGO}" alt="JISD">
+    <h1>INITIAL INSPECTION &amp; TEST REPORT — AS RECEIVED<small>JORDAN INVESTMENT &amp; SOUTHERN DEVELOPMENT CO.</small></h1></div>
   <table class="hd">
     <tr><td><b>JISD Ref #</b></td><td>${esc(j.jobNumber)}</td><td><b>Machine Type</b></td><td>${esc(d.deviceCode&&d.deviceCode!=="OTHER"?d.deviceCode:d.type)}</td></tr>
     <tr><td><b>Attention / Client</b></td><td>${esc(j.client)}</td><td><b>Service Type</b></td><td>${esc(d.workflow)}</td></tr>
@@ -3310,7 +3655,12 @@ function startDash(){
   unsubs.push(u1,u2);
   function draw(){
     $("#kJobs").textContent = jobs.filter(j=>j.year===YEAR || (j.jobNumber||"").includes("-"+YEAR+"-")).length;
-    const active=devs.filter(d=>d.station!=="archived"&&d.station!=="departed");
+    const jmap={}; jobs.forEach(j=>jmap[j.id]=j);
+    const active=devs.filter(d=>{
+      const j=jmap[d.jobId];
+      if(j && j.approvalStatus==="pending" && j.approvalStage==="start") return false;
+      return d.station!=="archived"&&d.station!=="departed";
+    });
     $("#kActive").textContent=active.length;
     const now=Date.now(), d90=now-90*24*3600*1000;
     const done=jobs.filter(j=>j.status==="archived" && j.archivedAt>=d90);
