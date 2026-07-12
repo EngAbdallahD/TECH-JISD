@@ -253,7 +253,7 @@ body.has-po .credit{bottom:44px}
     <button class="theme-btn login-theme" title="Light / dark">☀</button>
     <div class="login-hd">
       <h1>JISD <em>Workshop OS</em></h1>
-      <p>Jordan Investment &amp; Southern Development Co. <span style="float:right;color:var(--copper)">v6.9</span></p>
+      <p>Jordan Investment &amp; Southern Development Co. <span style="float:right;color:var(--copper)">v7.0</span></p>
     </div>
     <div class="login-bd">
       <label id="opLabel">Select operator</label>
@@ -3504,8 +3504,8 @@ function renderTech(list){
 }
 
 /* shared test form (technician inline / master modal) — Section 2 layout */
-function buildTestForm(host, d, phase, autoAdvance){
-  const t=(d.tests&&d.tests[phase])||{};
+function buildTestForm(host, d, phase, autoAdvance, draft){
+  const t = draft || (d.tests&&d.tests[phase]) || {};
   const P=k=>(d[k]&&d[k][phase]);
   const vibOff = !!P("vibOff");
   const runOff = phase==="initial" && !!P("runOff");
@@ -3595,10 +3595,25 @@ function buildTestForm(host, d, phase, autoAdvance){
     return dev.toFixed(2);
   }
   rIn.forEach(i=>i.oninput=bal); bal();
+  function snap(){
+    const g=c=>{ const el=host.querySelector(c); return el?el.value.trim():""; };
+    const pick=(a,fb)=>a!==""?a:(fb==null?"":fb);
+    return {
+      ir:{ue:pick(g(".tf-iue"),ir.ue||legacyIr), ve:pick(g(".tf-ive"),ir.ve), we:pick(g(".tf-iwe"),ir.we),
+          uv:pick(g(".tf-iuv"),ir.uv), vw:pick(g(".tf-ivw"),ir.vw), wu:pick(g(".tf-iwu"),ir.wu)},
+      r:{uv:pick(g(".tf-ruv"),r.uv), vw:pick(g(".tf-rvw"),r.vw), wu:pick(g(".tf-rwu"),r.wu)},
+      v:{l12:pick(g(".tf-v12"),v.l12), l23:pick(g(".tf-v23"),v.l23), l13:pick(g(".tf-v13"),v.l13)},
+      i:{l1:pick(g(".tf-i1"),cu.l1), l2:pick(g(".tf-i2"),cu.l2), l3:pick(g(".tf-i3"),cu.l3)},
+      vib:{deh:pick(g(".tf-vdeh"),vb.deh), dev:pick(g(".tf-vdev"),vb.dev), dea:pick(g(".tf-vdea"),vb.dea),
+           ndeh:pick(g(".tf-vndeh"),vb.ndeh), ndev:pick(g(".tf-vndev"),vb.ndev), ndea:pick(g(".tf-vndea"),vb.ndea)},
+      rpm:pick(g(".tf-rpm"),t.rpm), notes:pick(g(".tf-n"),t.notes)
+    };
+  }
   async function setOpt(field,val){
+    const keep=snap(); /* hold everything already typed */
     await updateDoc(doc(db,"devices",d.id),{[field+"."+phase]: val});
     d[field]=Object.assign({}, d[field]||{}); d[field][phase]=val;
-    buildTestForm(host, d, phase, autoAdvance);
+    buildTestForm(host, d, phase, autoAdvance, keep);
   }
   host.querySelectorAll(".tf-opt").forEach(b=>{ b.onclick=()=>setOpt(b.dataset.f, b.dataset.v); });
   const vt=host.querySelector(".tf-vibtoggle");
@@ -3627,8 +3642,9 @@ function buildTestForm(host, d, phase, autoAdvance){
     };
     const upd={ ["tests."+phase]: payload };
     if(autoAdvance){
+      const expect = phase==="initial" ? "electrical_test_initial" : "electrical_test_final";
       const path=pathOf(d); const i=path.indexOf(d.station);
-      if(i>-1 && i<path.length-1){
+      if(d.station===expect && i>-1 && i<path.length-1){
         upd.station=path[i+1];
         upd.history=[...(d.history||[]),{station:path[i+1],at:Date.now(),by:tester,note:phase+" test submitted"}];
       }
